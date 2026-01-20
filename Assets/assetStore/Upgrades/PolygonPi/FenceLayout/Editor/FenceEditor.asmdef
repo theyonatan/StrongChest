@@ -1,0 +1,18 @@
+{
+    "name": "FenceEditor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:eb6cee247621b954a86e80b76e7cc1f0"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
