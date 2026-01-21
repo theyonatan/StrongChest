@@ -22,6 +22,8 @@ public class ChestMultiplayerExtension : NetworkBehaviour
         
         // load extensions too
         GetComponent<RaycastGunMultiplayer>().SetupExtensionClient();
+        
+        FindFirstObjectByType<RespawnScreen>().HideScreen();
     }
     
     // On Death
@@ -31,6 +33,7 @@ public class ChestMultiplayerExtension : NetworkBehaviour
         var player = GetComponent<Player>();
         player.GetComponent<InputDirector>().DisableInput();
         player.DisablePlayerBehaviors();
+        FindFirstObjectByType<RespawnScreen>().ShowScreen();
         
         // respond
         RespondRespawnServerRpc();
