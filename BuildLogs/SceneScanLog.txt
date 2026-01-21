@@ -1,0 +1,246 @@
+==== SCENE DEBUG START ====
+Scene: Assets/Game/game.unity
+- Settings
+  * Component: UnityEngine.Transform
+  - Main Camera
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.Camera
+    * Component: UnityEngine.AudioListener
+    * Component: UnityEngine.Rendering.Universal.UniversalAdditionalCameraData
+    * Component: Unity.Cinemachine.CinemachineBrain
+  - Directional Light
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.Light
+    * Component: UnityEngine.Rendering.Universal.UniversalAdditionalLightData
+- Prefab Indexer
+  * Component: UnityEngine.Transform
+  * Component: Framework.Utils.UnityPlayModeSaverSceneUtils
+- NetworkManager
+  * Component: UnityEngine.Transform
+  * Component: FishNet.Managing.NetworkManager
+  * Component: FishNet.Managing.Observing.ObserverManager
+  - NetworkHudCanvas
+    * Component: UnityEngine.RectTransform
+    * Component: FishNet.Example.NetworkHudCanvases
+    * Component: UnityEngine.Canvas
+    * Component: UnityEngine.UI.CanvasScaler
+    * Component: UnityEngine.UI.GraphicRaycaster
+    - Logo
+      * Component: UnityEngine.RectTransform
+      * Component: UnityEngine.CanvasRenderer
+      * Component: UnityEngine.UI.RawImage
+    - ClientButton
+      * Component: UnityEngine.RectTransform
+      * Component: UnityEngine.CanvasRenderer
+      * Component: UnityEngine.UI.Image
+      - Text
+        * Component: UnityEngine.RectTransform
+        * Component: UnityEngine.CanvasRenderer
+        * Component: UnityEngine.UI.Image
+        * Component: UnityEngine.UI.Button
+    - ServerButton
+      * Component: UnityEngine.RectTransform
+      * Component: UnityEngine.CanvasRenderer
+      * Component: UnityEngine.UI.Image
+      - Text
+        * Component: UnityEngine.RectTransform
+        * Component: UnityEngine.CanvasRenderer
+        * Component: UnityEngine.UI.Image
+        * Component: UnityEngine.UI.Button
+- Story
+  * Component: UnityEngine.Transform
+  - MultiplayerManager
+    * Component: UnityEngine.Transform
+    * Component: MultiplayerManager
+    * Component: FishNet.Object.NetworkObject
+  - ChestStory
+    * Component: UnityEngine.Transform
+    * Component: FishNet.Object.NetworkObject
+    * Component: FishNet.Observing.NetworkObserver
+    * Component: ChestStory
+- WorldData
+  * Component: UnityEngine.Transform
+  - SpawnPoint
+    * Component: UnityEngine.Transform
+  - SpawnPoint (1)
+    * Component: UnityEngine.Transform
+  - SpawnPoint (2)
+    * Component: UnityEngine.Transform
+- World
+  * Component: UnityEngine.Transform
+  - Ground
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+  - Wall
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+  - Wall (1)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+  - Wall (2)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+  - Wall (3)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+  - Cube
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+  - Cube (1)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+  - Cube (2)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+  - Cube (10)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+  - Cube (11)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+  - Cube (12)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+  - Cube (6)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+  - Cube (7)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+  - Cube (9)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+  - Cube (8)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+  - Cube (3)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+  - Cube (4)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+  - Cube (14)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+  - Cube (15)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+  - Cube (13)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+  - Cube (5)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+  - Stairs
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+    * Component: UnityEngine.ProBuilder.Shapes.ProBuilderShape
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshCollider
+  - Ground (1)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+  - Stairs (1)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+    * Component: UnityEngine.ProBuilder.Shapes.ProBuilderShape
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshCollider
+- UI - Canvas
+  * Component: UnityEngine.RectTransform
+  * Component: UnityEngine.Canvas
+  * Component: UnityEngine.UI.CanvasScaler
+  * Component: UnityEngine.UI.GraphicRaycaster
+  - Cursor
+    * Component: UnityEngine.RectTransform
+    * Component: CrosshairHighlighter
+    - Cursor-Circle
+      * Component: UnityEngine.RectTransform
+      * Component: UnityEngine.CanvasRenderer
+      * Component: UnityEngine.UI.Image
+    - Cursor-Point
+      * Component: UnityEngine.RectTransform
+      * Component: UnityEngine.CanvasRenderer
+      * Component: UnityEngine.UI.Image
+  - Version
+    * Component: UnityEngine.RectTransform
+    * Component: UnityEngine.CanvasRenderer
+    * Component: TMPro.TextMeshProUGUI
+  - Respawn
+    * Component: UnityEngine.RectTransform
+    * Component: RespawnScreen
+    - Respawn
+      * Component: UnityEngine.RectTransform
+      * Component: UnityEngine.CanvasRenderer
+      * Component: UnityEngine.UI.Image
+      - Respawning Text
+        * Component: UnityEngine.RectTransform
+        * Component: UnityEngine.CanvasRenderer
+        * Component: TMPro.TextMeshProUGUI
+- EventSystem
+  * Component: UnityEngine.Transform
+  * Component: UnityEngine.EventSystems.EventSystem
+  * Component: UnityEngine.InputSystem.UI.InputSystemUIInputModule
+==== SCENE DEBUG END ====

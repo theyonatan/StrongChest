@@ -27,7 +27,7 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
     private CountdownTimer respawnTimer;
     private float respawnTime = 5f;
     
-    public void SetupExtensionClient()
+    public void OnEnablePlayer()
     {
         // Multiplayer Guard
         _player = GetComponent<Player>();

@@ -21,7 +21,7 @@ public class ChestMultiplayerExtension : NetworkBehaviour
         player.SwapPlayerState<cc_fpState, FP_CameraState>();
         
         // load extensions too
-        GetComponent<RaycastGunMultiplayer>().SetupExtensionClient();
+        GetComponent<RaycastGunMultiplayer>().OnEnablePlayer();
         
         FindFirstObjectByType<RespawnScreen>().HideScreen();
     }
