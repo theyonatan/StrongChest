@@ -1104,6 +1104,22 @@ PrefabInstance:
       propertyPath: playerPrefab
       value: 
       objectReference: {fileID: 4778891040591171001, guid: 4c70aa35b06fe114da39bda2b957a737, type: 3}
+    - target: {fileID: 562566609745610028, guid: 952b2eade4a20d644910323eb5ba8708, type: 3}
+      propertyPath: spawnPoints.Array.size
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 562566609745610028, guid: 952b2eade4a20d644910323eb5ba8708, type: 3}
+      propertyPath: 'spawnPoints.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2102920422}
+    - target: {fileID: 562566609745610028, guid: 952b2eade4a20d644910323eb5ba8708, type: 3}
+      propertyPath: 'spawnPoints.Array.data[1]'
+      value: 
+      objectReference: {fileID: 811262575}
+    - target: {fileID: 562566609745610028, guid: 952b2eade4a20d644910323eb5ba8708, type: 3}
+      propertyPath: 'spawnPoints.Array.data[2]'
+      value: 
+      objectReference: {fileID: 843271228}
     - target: {fileID: 2452048464628574467, guid: 952b2eade4a20d644910323eb5ba8708, type: 3}
       propertyPath: m_Name
       value: ChestStory
@@ -1154,7 +1170,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8232288561736715435, guid: 952b2eade4a20d644910323eb5ba8708, type: 3}
       propertyPath: SceneId
-      value: 3739993599
+      value: 3723491327
       objectReference: {fileID: 0}
     - target: {fileID: 8232288561736715435, guid: 952b2eade4a20d644910323eb5ba8708, type: 3}
       propertyPath: WasActiveDuringEdit
@@ -8150,7 +8166,7 @@ Transform:
   m_GameObject: {fileID: 811262574}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 7.89, y: 4.73, z: -1.0799999}
+  m_LocalPosition: {x: -14.02, y: 4.73, z: -15.16}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -8839,7 +8855,7 @@ Transform:
   m_GameObject: {fileID: 843271227}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 4.67, y: 10.84, z: 6.17}
+  m_LocalPosition: {x: -0.19, y: 10.84, z: 10.37}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -20367,7 +20383,7 @@ MonoBehaviour:
   <PrefabId>k__BackingField: 65535
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 0
-  SceneId: 4261412861
+  SceneId: 3701730813
   SerializedTransformProperties:
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 0}
@@ -23316,7 +23332,7 @@ Transform:
   m_GameObject: {fileID: 2102920421}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 4.73, z: 0}
+  m_LocalPosition: {x: 8.5, y: 4.73, z: -4.66}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

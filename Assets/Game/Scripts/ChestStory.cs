@@ -1,11 +1,13 @@
 using FishNet.Connection;
 using FishNet.Object;
+using OverallTimers;
 using UnityEngine;
 
 public class ChestStory : NetworkBehaviour
 {
     [SerializeField] private NetworkObject playerPrefab;
-    [SerializeField] private Transform spawnPoint;
+    [SerializeField] private Transform[] spawnPoints;
+    [SerializeField] private float respawnTime = 5f;
     private MultiplayerManager _mm;
 
     private void Start()
@@ -23,8 +25,11 @@ public class ChestStory : NetworkBehaviour
         _mm.OnClientDisconnected -= OnClientDisconnected;
     }
 
-    private void OnClientConnected(NetworkConnection connection)
+    public void OnClientConnected(NetworkConnection connection)
     {
+        // choose random spawn point to start at
+        var spawnPoint = spawnPoints[Random.Range(0, spawnPoints.Length)];
+        
         // spawn new player for everyone when joins (like middle of a match with no timer)
         var spawnedPlayer = _mm.SpawnPlayer(
             connection,
@@ -51,5 +56,58 @@ public class ChestStory : NetworkBehaviour
             _mm.DespawnPlayer(player);
             return;
         }
+    }
+    
+    [Server]
+    public void HandlePlayerKilled(int playerId)
+    {
+        var player = Player.GetPlayer(playerId);
+        if (!player)
+            return;
+
+        // disable player input on the client
+        var handler = player.GetComponent<ChestMultiplayerExtension>();
+        handler.NeutrilizePlayerRpc(handler.Owner);
+    }
+
+    public void RespondRespawn(int playerId)
+    {
+        if (!IsServerStarted)
+            return;
+        
+        var player = Player.GetPlayer(playerId);
+        if (!player)
+            return;
+
+        var handler = player.GetComponent<ChestMultiplayerExtension>();
+        var owner = handler.Owner;
+
+        handler.Despawn();
+        StartRespawn(owner);
+    }
+    
+    private void StartRespawn(NetworkConnection conn)
+    {
+        var timer = new CountdownTimer(respawnTime);
+        timer.OnTimerStop += () => RespawnPlayer(conn);
+        timer.Start();
+
+        // tick from story
+        StartCoroutine(TickTimer(timer));
+    }
+    
+    private System.Collections.IEnumerator TickTimer(CountdownTimer timer)
+    {
+        while (!timer.IsFinished)
+        {
+            timer.Tick(Time.deltaTime);
+            yield return null;
+        }
+    }
+
+    private void RespawnPlayer(NetworkConnection conn)
+    {
+        Debug.Log($"Respawning player {conn.ClientId}");
+        OnClientConnected(conn);
     }
 }

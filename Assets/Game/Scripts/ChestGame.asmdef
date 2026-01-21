@@ -1,0 +1,20 @@
+{
+    "name": "ChestGame",
+    "rootNamespace": "",
+    "references": [
+        "GUID:7c706a5019ce3a14db1bdfa7dc1dc081",
+        "GUID:5a5dfecaa428f4a4096e5d40bf679556",
+        "GUID:9f08ca82eec9ecb4d9b9f6ada43fd757",
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
+        "GUID:32cf404c1040626458b5abce9613af40"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

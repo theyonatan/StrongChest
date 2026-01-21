@@ -116,7 +116,8 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 8232288561736715435}
   _networkObjectCache: {fileID: 0}
   playerPrefab: {fileID: 0}
-  spawnPoint: {fileID: 0}
+  spawnPoints: []
+  respawnTime: 5
 --- !u!114 &8232288561736715435 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 7854188235059619540, guid: 7fc9c8f2eb0550948bcd5b0f03e3f71d, type: 3}

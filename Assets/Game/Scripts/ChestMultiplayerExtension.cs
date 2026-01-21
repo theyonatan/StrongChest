@@ -1,5 +1,6 @@
 using FishNet.Connection;
 using FishNet.Object;
+using UnityEngine;
 
 public class ChestMultiplayerExtension : NetworkBehaviour
 {
@@ -21,5 +22,24 @@ public class ChestMultiplayerExtension : NetworkBehaviour
         
         // load extensions too
         GetComponent<RaycastGunMultiplayer>().SetupExtensionClient();
+    }
+    
+    // On Death
+    [TargetRpc]
+    public void NeutrilizePlayerRpc(NetworkConnection conn)
+    {
+        var player = GetComponent<Player>();
+        player.GetComponent<InputDirector>().DisableInput();
+        player.DisablePlayerBehaviors();
+        
+        // respond
+        RespondRespawnServerRpc();
+    }
+    
+    [ServerRpc(RequireOwnership = true)]
+    private void RespondRespawnServerRpc()
+    {
+        var story = FindFirstObjectByType<ChestStory>();
+        story.RespondRespawn(GetComponent<Player>().PlayerId);
     }
 }
