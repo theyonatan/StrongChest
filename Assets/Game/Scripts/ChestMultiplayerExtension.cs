@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FishNet.Connection;
 using FishNet.Object;
 using UnityEngine;
@@ -24,6 +25,13 @@ public class ChestMultiplayerExtension : NetworkBehaviour
         GetComponent<RaycastGunMultiplayer>().OnEnablePlayer();
         
         FindFirstObjectByType<RespawnScreen>().HideScreen();
+    }
+    
+    // On Join Game
+    [TargetRpc]
+    public void FetchExistingLeaderboard(NetworkConnection conn, Dictionary<int, int> leaderboard)
+    {
+        Leaderboard.Instance.UpdateLeaderboard(leaderboard);
     }
     
     // On Death

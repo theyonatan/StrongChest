@@ -26,6 +26,7 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
     [Header("Multiplayer Settings")]
     private CountdownTimer respawnTimer;
     private float respawnTime = 5f;
+    private int localPlayerId = -1;
     
     public void OnEnablePlayer()
     {
@@ -38,6 +39,7 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
         _animationsManager = GetComponent<AnimationsManager>();
         cam = _player.GetCamera().transform;
         _director = GetComponent<InputDirector>();
+        localPlayerId = _player.PlayerId;
         
         // Subscribe to input events
         _director.OnFirePressed += OnFirePressed;
@@ -71,7 +73,7 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
         // }
 
         // send rpc to server
-        OnPlayerShootRpc(cam.position, cam.forward);
+        OnPlayerShootRpc(localPlayerId, cam.position, cam.forward);
     }
     
     private void OnFirePressed()
@@ -89,7 +91,7 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
     }
 
     [ServerRpc(RequireOwnership = true)]
-    private void OnPlayerShootRpc(Vector3 camPosition, Vector3 camForward)
+    private void OnPlayerShootRpc(int localId, Vector3 camPosition, Vector3 camForward)
     {
         if (!IsServerStarted)
             return;
@@ -105,23 +107,14 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
         {
             // We hit a player
             if (hit.collider.TryGetComponent(out Player playerHit))
-                KillPlayer(playerHit);
+                KillPlayer(localId, playerHit);
         }
     }
 
-    private void KillPlayer(Player playerHit)
+    private void KillPlayer(int shootingPlayerId, Player playerHit)
     {
-        // reply shoot Result to all clients
-        ResultOfShootRpc(playerHit.PlayerId);
-        
         // Despawn player
         var story = FindFirstObjectByType<ChestStory>();
-        story.HandlePlayerKilled(playerHit.PlayerId);
-    }
-
-    [ObserversRpc]
-    private void ResultOfShootRpc(int hitId)
-    {
-        Debug.Log($"Someone shot {hitId}!");
+        story.HandlePlayerKilled(shootingPlayerId, playerHit.PlayerId);
     }
 }
