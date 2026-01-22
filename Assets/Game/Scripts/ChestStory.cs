@@ -12,6 +12,9 @@ public class ChestStory : NetworkBehaviour
     [SerializeField] private float respawnTime = 5f;
     private MultiplayerManager _mm;
     
+    // Connection
+    private readonly HashSet<string> _takenUsernames = new();
+    
     // ---- Combat ----
     private readonly Dictionary<int, int> _playerScores = new ();
 
@@ -76,6 +79,37 @@ public class ChestStory : NetworkBehaviour
         newPlayer.SetupFPSPlayerRpc(connection);
 
         return newPlayer;
+    }
+    
+    // --------------------------
+    // Connection
+    // --------------------------
+    [ServerRpc]
+    public void RequestUsername(string requestedName, NetworkConnection conn = null)
+    {
+        string finalName = MakeUnique(requestedName);
+        _takenUsernames.Add(finalName);
+
+        SetUsernameRpc(conn, finalName);
+    }
+    
+    private string MakeUnique(string baseName)
+    {
+        if (!_takenUsernames.Contains(baseName))
+            return baseName;
+
+        int i = 1;
+        while (_takenUsernames.Contains($"{baseName} {i}"))
+            i++;
+
+        return $"{baseName} {i}";
+    }
+    
+    [TargetRpc]
+    private void SetUsernameRpc(NetworkConnection conn, string finalName)
+    {
+        // Player.Local.Username = finalName;
+        Debug.Log("my username: " + finalName);
     }
     
     // --------------------------
