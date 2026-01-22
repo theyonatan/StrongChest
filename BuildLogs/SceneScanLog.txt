@@ -239,6 +239,13 @@ Scene: Assets/Game/game.unity
         * Component: UnityEngine.RectTransform
         * Component: UnityEngine.CanvasRenderer
         * Component: TMPro.TextMeshProUGUI
+  - Leaderboard
+    * Component: UnityEngine.RectTransform
+    * Component: UnityEngine.CanvasRenderer
+    * Component: UnityEngine.UI.Image
+    * Component: UnityEngine.UI.VerticalLayoutGroup
+    * Component: UnityEngine.UI.ContentSizeFitter
+    * Component: Leaderboard
 - EventSystem
   * Component: UnityEngine.Transform
   * Component: UnityEngine.EventSystems.EventSystem
