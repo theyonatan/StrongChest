@@ -50,8 +50,10 @@ namespace FishNet.Authenticating
         public override void InitializeOnce(NetworkManager networkManager)
         {
             base.InitializeOnce(networkManager);
+            
             // Listen for connection state of local server to set hash.
             NetworkManager.ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
+            
             // Listen for broadcast from client. Be sure to set requireAuthentication to false.
             NetworkManager.ServerManager.RegisterBroadcast<HostPasswordBroadcast>(OnHostPasswordBroadcast, false);
         }
