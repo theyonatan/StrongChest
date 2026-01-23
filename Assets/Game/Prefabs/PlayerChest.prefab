@@ -26,7 +26,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6542363504449478287, guid: f4500315c4977954e9b5c4ccf5fd90b9, type: 3}
       propertyPath: <PrefabId>k__BackingField
-      value: 7
+      value: 8
       objectReference: {fileID: 0}
     - target: {fileID: 6542363504449478287, guid: f4500315c4977954e9b5c4ccf5fd90b9, type: 3}
       propertyPath: NetworkBehaviours.Array.size
@@ -146,6 +146,7 @@ MonoBehaviour:
   _componentIndexCache: 2
   _addedNetworkObject: {fileID: 4778891040591171001}
   _networkObjectCache: {fileID: 4778891040591171001}
+  Username: 
 --- !u!114 &5685395334387654109
 MonoBehaviour:
   m_ObjectHideFlags: 0
