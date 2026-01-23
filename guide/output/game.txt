@@ -1,0 +1,892 @@
+structure:
+- game
+    - Menu.unity
+    - Menu.unity.meta
+    - Prefabs.meta
+    - Scripts.meta
+    - game.unity
+    - game.unity.meta
+    - game_Blocks.meta
+  - Prefabs
+      - ChestStory.prefab
+      - ChestStory.prefab.meta
+      - PlayerChest.prefab
+      - PlayerChest.prefab.meta
+      - Resources.meta
+      - WindManager.prefab
+      - WindManager.prefab.meta
+    - Resources
+        - LeaderboardCard.prefab
+        - LeaderboardCard.prefab.meta
+  - Scripts
+      - ChestGame.asmdef
+      - ChestGame.asmdef.meta
+      - ChestMultiplayerExtension.cs
+      - ChestMultiplayerExtension.cs.meta
+      - ChestStory.cs
+      - ChestStory.cs.meta
+      - Leaderboard.meta
+      - Menu.meta
+      - MenuStory.cs
+      - MenuStory.cs.meta
+      - RaycastGunMultiplayer.cs
+      - RaycastGunMultiplayer.cs.meta
+      - RespawnScreen.cs
+      - RespawnScreen.cs.meta
+    - Leaderboard
+        - Leaderboard.cs
+        - Leaderboard.cs.meta
+        - LeaderboardCard.cs
+        - LeaderboardCard.cs.meta
+        - LeaderboardPlayerName.cs
+        - LeaderboardPlayerName.cs.meta
+        - LeaderboardPlayerScore.cs
+        - LeaderboardPlayerScore.cs.meta
+    - Menu
+        - PlayerWindManager.cs
+        - PlayerWindManager.cs.meta
+        - WindManager.cs
+        - WindManager.cs.meta
+  - game_Blocks
+      - ChestStory_327234129.txt
+      - ChestStory_327234129.txt.meta
+      - Directional Light_1986876465.txt
+      - Directional Light_1986876465.txt.meta
+      - Ground_1080898241.txt
+      - Ground_1080898241.txt.meta
+      - Main Camera_871945103.txt
+      - Main Camera_871945103.txt.meta
+      - MultiplayerManager_1362299543.txt
+      - MultiplayerManager_1362299543.txt.meta
+      - NetworkManager_961643926.txt
+      - NetworkManager_961643926.txt.meta
+      - Prefab Indexer_267534158.txt
+      - Prefab Indexer_267534158.txt.meta
+      - SpawnPoint_2102920421.txt
+      - SpawnPoint_2102920421.txt.meta
+      - __Footer.txt
+      - __Footer.txt.meta
+      - __Header.txt
+      - __Header.txt.meta
+      - __SceneSettings.txt
+      - __SceneSettings.txt.meta
+      - bruh_614428138.txt
+      - bruh_614428138.txt.meta
+
+```Scripts\ChestMultiplayerExtension.cs
+using System.Collections.Generic;
+using FishNet.Connection;
+using FishNet.Object;
+
+public class ChestMultiplayerExtension : NetworkBehaviour
+{
+    public string Username;
+    
+    [TargetRpc]
+    public void SetupFPSPlayerRpc(NetworkConnection conn)
+    {
+        // give authority
+        var player = GetComponent<Player>();
+        player.PlayerId = OwnerId;
+        player.SetAuthority(true);
+        player.EnablePlayerBehaviors();
+        
+        // Load State
+        player.Awake();
+        player.OnEnable();
+        player.Start();
+        
+        player.SwapPlayerState<cc_fpState, FP_CameraState>();
+        
+        // load extensions too
+        GetComponent<RaycastGunMultiplayer>().OnEnablePlayer();
+        
+        FindFirstObjectByType<RespawnScreen>().HideScreen();
+    }
+    
+    // On Join Game
+    [TargetRpc]
+    public void FetchExistingLeaderboard(NetworkConnection conn, Dictionary<int, int> leaderboard)
+    {
+        Leaderboard.Instance.UpdateLeaderboard(leaderboard);
+    }
+    
+    // On Death
+    [TargetRpc]
+    public void NeutrilizePlayerRpc(NetworkConnection conn)
+    {
+        var player = GetComponent<Player>();
+        player.GetComponent<InputDirector>().DisableInput();
+        player.DisablePlayerBehaviors();
+        FindFirstObjectByType<RespawnScreen>().ShowScreen();
+        
+        // respond
+        RespondRespawnServerRpc();
+    }
+    
+    [ServerRpc(RequireOwnership = true)]
+    private void RespondRespawnServerRpc()
+    {
+        var story = FindFirstObjectByType<ChestStory>();
+        story.RespondRespawn(GetComponent<Player>().PlayerId);
+    }
+}
+```
+
+```Scripts\ChestStory.cs
+using System.Collections.Generic;
+using FishNet.Connection;
+using FishNet.Object;
+using OverallTimers;
+using UnityEngine;
+
+public class ChestStory : NetworkBehaviour
+{
+    // ---- Network Connection ----
+    [SerializeField] private NetworkObject playerPrefab;
+    [SerializeField] private Transform[] spawnPoints;
+    [SerializeField] private float respawnTime = 5f;
+    private MultiplayerManager _mm;
+    
+    // Connection
+    private readonly HashSet<string> _takenUsernames = new();
+    
+    // ---- Combat ----
+    private readonly Dictionary<int, int> _playerScores = new ();
+
+    private void Start()
+    {
+        // subscribe to client connection events
+        _mm = MultiplayerManager.Instance;
+        _mm.OnClientConnected += OnClientConnected;
+        _mm.OnClientDisconnected += OnClientDisconnected;
+    }
+
+    private void OnDestroy()
+    {
+        // unsubscribe client connection events
+        _mm.OnClientConnected -= OnClientConnected;
+        _mm.OnClientDisconnected -= OnClientDisconnected;
+    }
+
+    private void OnClientConnected(NetworkConnection connection)
+    {
+        // Setup new player
+        var newPlayer = SpawnPlayer(connection);
+        
+        // Leaderboard
+        _playerScores.Add(connection.ClientId, 0);                  // update on server
+        UpdateLeaderboardRpc(connection.ClientId);                  // update on existing clients
+        newPlayer.FetchExistingLeaderboard(connection, _playerScores); // update on connected client
+    }
+
+    private void OnClientDisconnected(NetworkConnection connection)
+    {
+        // despawn the leaving client object for everyone when he disconnects
+        var players = FindObjectsByType<Player>(FindObjectsSortMode.InstanceID);
+        
+        foreach (var player in players)
+        {
+            if (player.PlayerId != connection.ClientId)
+                continue;
+            
+            _mm.DespawnPlayer(player);
+            return;
+        }
+    }
+    
+    private ChestMultiplayerExtension SpawnPlayer(NetworkConnection connection)
+    {
+        // choose random spawn point to start at
+        var spawnPoint = spawnPoints[Random.Range(0, spawnPoints.Length)];
+        
+        // spawn new player for everyone when joins (like middle of a match with no timer)
+        var spawnedPlayer = _mm.SpawnPlayer(
+            connection,
+            playerPrefab,
+            spawnPoint.position,
+            Quaternion.identity);
+        
+        spawnedPlayer.PlayerId = connection.ClientId;
+
+        var newPlayer = spawnedPlayer.GetComponent<ChestMultiplayerExtension>();
+        
+        // tell the client to set itself up locally
+        newPlayer.SetupFPSPlayerRpc(connection);
+
+        return newPlayer;
+    }
+    
+    // --------------------------
+    // Connection
+    // --------------------------
+    [ServerRpc]
+    public void RequestUsername(string requestedName, NetworkConnection conn = null)
+    {
+        string finalName = MakeUnique(requestedName);
+        _takenUsernames.Add(finalName);
+
+        SetUsernameRpc(conn, finalName);
+    }
+    
+    private string MakeUnique(string baseName)
+    {
+        if (!_takenUsernames.Contains(baseName))
+            return baseName;
+
+        int i = 1;
+        while (_takenUsernames.Contains($"{baseName} {i}"))
+            i++;
+
+        return $"{baseName} {i}";
+    }
+    
+    [TargetRpc]
+    private void SetUsernameRpc(NetworkConnection conn, string finalName)
+    {
+        // Player.Local.Username = finalName;
+        Debug.Log("my username: " + finalName);
+    }
+    
+    // --------------------------
+    // Player combat events
+    // --------------------------
+    [Server]
+    public void HandlePlayerKilled(int shootingPlayerId, int killedPlayerId)
+    {
+        var player = Player.GetPlayer(killedPlayerId);
+        if (!player)
+            return;
+
+        _playerScores[shootingPlayerId] += 1;
+        
+        UpdateLeaderboardRpc(
+            shootingPlayerId,
+            killedPlayerId,
+            _playerScores[shootingPlayerId]);
+
+        // disable player input on the client
+        var handler = player.GetComponent<ChestMultiplayerExtension>();
+        handler.NeutrilizePlayerRpc(handler.Owner);
+    }
+
+    [ObserversRpc]
+    private void UpdateLeaderboardRpc(int shooting, int shot, int shootingKillCount)
+    {
+        Debug.Log($"{shooting} shot {shot}.");
+        Leaderboard.Instance.UpdateCount(shooting, shootingKillCount);
+    }
+
+    public void RespondRespawn(int playerId)
+    {
+        if (!IsServerStarted)
+            return;
+        
+        var player = Player.GetPlayer(playerId);
+        if (!player)
+            return;
+
+        var handler = player.GetComponent<ChestMultiplayerExtension>();
+        var owner = handler.Owner;
+
+        handler.Despawn();
+        StartRespawn(owner);
+    }
+    
+    private void StartRespawn(NetworkConnection conn)
+    {
+        var timer = new CountdownTimer(respawnTime);
+        timer.OnTimerStop += () => RespawnPlayer(conn);
+        timer.Start();
+
+        // tick from story
+        StartCoroutine(TickTimer(timer));
+    }
+    
+    private System.Collections.IEnumerator TickTimer(CountdownTimer timer)
+    {
+        while (!timer.IsFinished)
+        {
+            timer.Tick(Time.deltaTime);
+            yield return null;
+        }
+    }
+
+    private void RespawnPlayer(NetworkConnection conn)
+    {
+        Debug.Log($"Respawning player {conn.ClientId}");
+        SpawnPlayer(conn);
+    }
+    
+    // --------------------------
+    // Leaderboard
+    // --------------------------
+    
+    // for existing players
+    [ObserversRpc]
+    private void UpdateLeaderboardRpc(int playerId)
+    {
+        Debug.Log($"man {playerId}");
+        Leaderboard.Instance.AddPlayerToLeaderboard(playerId);
+    }
+}
+```
+
+```Scripts\MenuStory.cs
+using System.Collections;
+using System.Net;
+using System.Net.Sockets;
+using FishNet;
+using FishNet.Managing;
+using FishNet.Managing.Scened;
+using FishNet.Transporting;
+using UnityEngine;
+
+public class MenuStory : MonoBehaviour
+{
+    [SerializeField] private TMPro.TMP_InputField ipField;
+    [SerializeField] private TMPro.TMP_InputField usernameField;
+    [SerializeField] private TMPro.TextMeshProUGUI usernameErrorText;
+    
+    [SerializeField] private TMPro.TextMeshProUGUI displayIpText;
+
+    [SerializeField] private WindManager windManagerPrefab;
+    
+    private NetworkManager _networkManager;
+    
+    private bool _isConnecting;
+
+    private void Awake()
+    {
+        _networkManager = InstanceFinder.NetworkManager;
+        usernameErrorText.text = "";
+        displayIpText.text = "";
+    }
+
+    public void StartHost()
+    {
+        // Start Host
+        _networkManager.ServerManager.StartConnection();
+        _networkManager.ClientManager.StartConnection();
+        
+        // Show Ip
+        displayIpText.text = $"IP: {GetLocalIPv4()}";
+
+        // On Server Start
+        _networkManager.ServerManager.OnServerConnectionState += args =>
+        {
+            if (args.ConnectionState == LocalConnectionState.Started)
+                OnServerStarted();
+        };
+    }
+
+    private void OnServerStarted()
+    {
+        // Spawn wind manager on the server, so it persist across scenes
+        if (_networkManager != null && _networkManager.IsServerStarted)
+        {
+            if (WindManager.Instance != null)
+                return;
+            
+            var wind = Instantiate(windManagerPrefab);
+            _networkManager.ServerManager.Spawn(wind);
+        }
+        
+        // self username
+        var username = usernameField.text;
+        StartCoroutine(WaitConnectedThenRequestUsername(username));
+    }
+
+    public void StartClient()
+    {
+        // Guard connecting
+        if (_isConnecting) return;
+        _isConnecting = true;
+        
+        // collect ip and username data
+        usernameErrorText.text = "";
+        
+        string ip = ipField.text.Trim();
+        string username = usernameField.text.Trim();
+
+        // verify username
+        if (string.IsNullOrEmpty(username))
+        {
+            usernameErrorText.text = "Username is empty.";
+            _isConnecting = false;
+            return;
+        }
+
+        // wait for server to approve username
+        _networkManager.ClientManager.OnClientConnectionState += args =>
+        {
+            if (args.ConnectionState == LocalConnectionState.Started)
+                StartCoroutine(WaitConnectedThenRequestUsername(username));
+        };
+        
+        // actually connect to server
+        _networkManager.ClientManager.StartConnection(ip);
+    }
+
+    /// <summary>
+    /// wait until fully connected and request username
+    /// </summary>
+    public IEnumerator WaitConnectedThenRequestUsername(string username)
+    {
+        // Wait until connected
+        Debug.Log("Waiting for connection");
+        while (_networkManager && !_networkManager.IsClientStarted)
+            yield return null;
+        
+        // wait until wind manager spawns for the client
+        Debug.Log("Waiting for Wind");
+        while (!WindManager.Instance || !WindManager.Instance.IsSpawned)
+            yield return null;
+        
+        // wait for client to start
+        Debug.Log("Waiting for Client to start");
+        while (_networkManager && !WindManager.Instance.IsClientInitialized)
+            yield return null;
+        
+        // if aborted
+        if (!_networkManager || !_networkManager.IsClientStarted) yield break;
+        
+        // Subscribe to username result
+        WindManager.Instance.OnUsernameResult -= OnUsernameResult;
+        WindManager.Instance.OnUsernameResult += OnUsernameResult;
+        
+        // Request username from server
+        WindManager.Instance.CheckUsernameServer(username);
+    }
+
+    private void OnUsernameResult(bool available, string message)
+    {
+        // Unsubscribe from event
+        if (WindManager.Instance)
+            WindManager.Instance.OnUsernameResult -= OnUsernameResult;
+        
+        _isConnecting = false;
+
+        // unavailable
+        if (!available)
+        {
+            usernameErrorText.text = message;
+            
+            // disconnect if username is bad
+            if (_networkManager != null)
+                _networkManager.ClientManager.StopConnection();
+        }
+        
+        // available
+        if (available)
+        {
+            // Confirm username locally
+            PlayerWindManager.ChosenUsername = usernameField.text.Trim();
+            usernameErrorText.text = "Connection Successful";
+            
+            // Load scene for new client
+            SceneLoadData sceneLoadData = new SceneLoadData("game") {
+                ReplaceScenes = ReplaceOption.All
+            };
+            
+            _networkManager.SceneManager.LoadGlobalScenes(sceneLoadData);
+        }
+    }
+
+    private static string GetLocalIPv4()
+    {
+        foreach (var ip in Dns.GetHostEntry(Dns.GetHostName()).AddressList)
+        {
+            if (ip.AddressFamily == AddressFamily.InterNetwork)
+                return ip.ToString();
+        }
+        return "Unknown";
+    }
+}
+```
+
+```Scripts\RaycastGunMultiplayer.cs
+﻿using FishNet.Connection;
+using FishNet.Object;
+using OverallTimers;
+using UnityEngine;
+
+/// <summary>
+/// This does not work with the original offline gun extensions.
+/// requires its own on hit detections.
+/// </summary>
+public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
+{
+    [Header("Gun Stats")]
+    [SerializeField] private float damage = 10f;
+    [SerializeField] private float maxCooldown = 0.5f;
+
+    private CountdownTimer cooldownTimer;
+    private Transform cam;
+    private Player _player;
+    private InputDirector _director;
+    
+    [Header("Raycast Gun Settings")]
+    [SerializeField] private float maxRange = 100f;
+    [SerializeField] private LayerMask hitLayers;
+    private AnimationsManager _animationsManager;
+
+    [Header("Multiplayer Settings")]
+    private CountdownTimer respawnTimer;
+    private float respawnTime = 5f;
+    private int localPlayerId = -1;
+    
+    public void OnEnablePlayer()
+    {
+        // Multiplayer Guard
+        _player = GetComponent<Player>();
+        if (!_player.HasAuthority)
+            return;
+        
+        // Get Assignables
+        _animationsManager = GetComponent<AnimationsManager>();
+        cam = _player.GetCamera().transform;
+        _director = GetComponent<InputDirector>();
+        localPlayerId = _player.PlayerId;
+        
+        // Subscribe to input events
+        _director.OnFirePressed += OnFirePressed;
+
+        // Reset cooldown
+        cooldownTimer = new CountdownTimer(maxCooldown);
+    }
+
+    public void UpdatePlayer()
+    {
+        // Multiplayer Guard
+        if (!_player.HasAuthority)
+            return;
+        
+        respawnTimer?.Tick(Time.deltaTime);
+        cooldownTimer?.Tick(Time.deltaTime);
+    }
+
+    private void PerformShoot()
+    {
+        if (cam == null)
+        {
+            Debug.LogWarning("RaycastGun: Missing camera reference.");
+            return;
+        }
+
+        // Player animations
+        // if (_animationsManager != null)
+        // {
+        //     _animationsManager.Play("Shoot");
+        // }
+
+        // send rpc to server
+        OnPlayerShootRpc(localPlayerId, cam.position, cam.forward);
+    }
+    
+    private void OnFirePressed()
+    {
+        // Multiplayer Guard
+        if (!_player.HasAuthority)
+            return;
+        
+        // If there's still cooldown, don't shoot
+        if (!cooldownTimer.IsFinished) return;
+        cooldownTimer.Reset();
+        cooldownTimer.Start();
+
+        PerformShoot();
+    }
+
+    [ServerRpc(RequireOwnership = true)]
+    private void OnPlayerShootRpc(int localId, Vector3 camPosition, Vector3 camForward)
+    {
+        if (!IsServerStarted)
+            return;
+        
+        // log for self
+        Debug.Log($"Doing some calculations. from {camPosition} to {camForward}");
+        
+        // rpc
+        Vector3 origin = camPosition + camForward * 0.65f; // to not hit self
+        Ray ray = new Ray(origin, camForward);
+
+        if (Physics.Raycast(ray, out var hit, maxRange))
+        {
+            // We hit a player
+            if (hit.collider.TryGetComponent(out Player playerHit))
+                KillPlayer(localId, playerHit);
+        }
+    }
+
+    private void KillPlayer(int shootingPlayerId, Player playerHit)
+    {
+        // Despawn player
+        var story = FindFirstObjectByType<ChestStory>();
+        story.HandlePlayerKilled(shootingPlayerId, playerHit.PlayerId);
+    }
+}
+```
+
+```Scripts\RespawnScreen.cs
+using UnityEngine;
+
+public class RespawnScreen : MonoBehaviour
+{
+    [SerializeField] private GameObject screen;
+    
+    public void ShowScreen() => screen.SetActive(true);
+    public void HideScreen() => screen.SetActive(false);
+}
+```
+
+```Scripts\Leaderboard\Leaderboard.cs
+using System.Collections.Generic;
+using UnityEngine;
+
+public class Leaderboard : MonoBehaviour
+{
+    private readonly Dictionary<int, LeaderboardCard> _cards = new ();
+    
+    #region Singleton
+    
+    public static Leaderboard Instance;
+    private void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
+    }
+
+    #endregion
+
+    /// <summary>
+    /// For existing players, add this new player to the leaderboard
+    /// </summary>
+    /// <param name="playerId">new player id</param>
+    public void AddPlayerToLeaderboard(int playerId)
+    {
+        var cardObject = Resources.Load<LeaderboardCard>("LeaderboardCard");
+        if (!cardObject)
+        {
+            Debug.LogError($"{nameof(Leaderboard)}: Card Object not found.");
+            return;
+        }
+        
+        var spawnedCard = Instantiate(cardObject, transform);
+        spawnedCard.SetPlayerNameText($"Player {playerId}");
+        spawnedCard.SetPlayerScoreText("0");
+        
+        _cards.Add(playerId, spawnedCard);
+    }
+
+    /// <summary>
+    /// for the new player, give the full leaderboard including himself.
+    /// </summary>
+    /// <param name="updatedBoard">all connected players, including myself (new player)</param>
+    public void UpdateLeaderboard(Dictionary<int, int> updatedBoard)
+    {
+        // add existing
+        foreach (var player in updatedBoard)
+        {
+            AddPlayerToLeaderboard(player.Key);
+            UpdateCount(player.Key, player.Value);
+        }
+    }
+    
+    public void UpdateCount(int playerId, int count)
+    {
+        if (!_cards.TryGetValue(playerId, out var card))
+        {
+            Debug.LogError($"{nameof(Leaderboard)}: Player {playerId} not found.");
+            return;
+        }
+        
+        card.SetPlayerScoreText(count.ToString());
+    }
+}
+```
+
+```Scripts\Leaderboard\LeaderboardCard.cs
+using System;
+using UnityEngine;
+using TMPro;
+
+public class LeaderboardCard : MonoBehaviour
+{
+    private TextMeshProUGUI _playerNameText;
+    private TextMeshProUGUI _playerScoreText;
+
+    private void Awake()
+    {
+        _playerNameText = GetComponentInChildren<LeaderboardPlayerName>().GetComponent<TextMeshProUGUI>();
+        _playerScoreText = GetComponentInChildren<LeaderboardPlayerScore>().GetComponent<TextMeshProUGUI>();
+    }
+
+    public void SetPlayerNameText(string playerName)
+    {
+        _playerNameText.text = playerName;
+    }
+    
+    public void SetPlayerScoreText(string playerScore)
+    {
+        _playerScoreText.text = playerScore;
+    }
+}
+```
+
+```Scripts\Leaderboard\LeaderboardPlayerName.cs
+using UnityEngine;
+
+public class LeaderboardPlayerName : MonoBehaviour
+{
+    // Start is called once before the first execution of Update after the MonoBehaviour is created
+    void Start()
+    {
+        
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        
+    }
+}
+```
+
+```Scripts\Leaderboard\LeaderboardPlayerScore.cs
+    using UnityEngine;
+
+public class LeaderboardPlayerScore : MonoBehaviour
+{
+    // Start is called once before the first execution of Update after the MonoBehaviour is created
+    void Start()
+    {
+        
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        
+    }
+}
+```
+
+```Scripts\Menu\PlayerWindManager.cs
+using System;
+using UnityEngine;
+
+/// <summary>
+/// What moves between scenes locally
+/// (not attached to network behavior or anything multiplayer)
+/// </summary>
+public class PlayerWindManager : MonoBehaviour
+{
+    public static PlayerWindManager Instance { get; private set; }
+
+    #region Singleton
+
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        Instance = this;
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this) Instance = null;
+    }
+
+    #endregion
+
+    public static string ChosenUsername = "";
+}
+```
+
+```Scripts\Menu\WindManager.cs
+using System.Collections.Generic;
+using FishNet.Connection;
+using FishNet.Object;
+using UnityEngine.Events;
+
+/// <summary>
+/// What goes between scenes in a multiplayer environment
+/// </summary>
+public class WindManager : NetworkBehaviour
+{
+    private readonly HashSet<string> _taken = new();
+    public static WindManager Instance { get; private set; }
+
+    #region Singleton
+
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        Instance = this;
+    }
+
+    public override void OnStopNetwork()
+    {
+        base.OnStopNetwork();
+        
+        if (Instance == this) Instance = null;
+    }
+
+    #endregion
+    
+    // --------------------------
+    // Username check
+    // --------------------------
+    public UnityAction<bool, string> OnUsernameResult; // client gets result
+    
+    public void CheckUsernameServer(string username) => CheckUsernameServerRpc(username);
+    
+    [ServerRpc(RequireOwnership = false)]
+    private void CheckUsernameServerRpc(string requestedName, NetworkConnection conn = null)
+    {
+        if (conn == null || !conn.IsValid)
+            return;
+        
+        requestedName = (requestedName ?? "").Trim();
+
+        if (string.IsNullOrEmpty(requestedName))
+        {
+            UsernameResultTargetRpc(conn, false, "Username is empty");
+            return;
+        }
+
+        if (_taken.Contains(requestedName))
+        {
+            UsernameResultTargetRpc(conn, false, "Username already taken in requested server");
+            return;
+        }
+        
+        _taken.Add(requestedName);
+        UsernameResultTargetRpc(conn, true, "");
+    }
+
+    [TargetRpc]
+    private void UsernameResultTargetRpc(NetworkConnection conn, bool available, string message)
+    {
+        // Menu story will listen to this
+        OnUsernameResult?.Invoke(available, message);
+    }
+}
+```
+
