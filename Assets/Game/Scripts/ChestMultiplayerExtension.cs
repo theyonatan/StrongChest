@@ -1,10 +1,11 @@
 using System.Collections.Generic;
 using FishNet.Connection;
 using FishNet.Object;
-using UnityEngine;
 
 public class ChestMultiplayerExtension : NetworkBehaviour
 {
+    public string Username;
+    
     [TargetRpc]
     public void SetupFPSPlayerRpc(NetworkConnection conn)
     {
