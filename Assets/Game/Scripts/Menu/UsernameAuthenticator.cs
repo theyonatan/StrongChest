@@ -6,10 +6,12 @@ using FishNet.Connection;
 using FishNet.Managing;
 using FishNet.Transporting;
 using UnityEngine;
+using UnityEngine.Events;
 
 public class UsernameAuthenticator : Authenticator
 {
     public override event Action<NetworkConnection, bool> OnAuthenticationResult;
+    public UnityEvent<bool, string> StoryOnAuthenticationResult = new ();
     
     private readonly HashSet<string> _takenUsernames = new (StringComparer.OrdinalIgnoreCase);
 
@@ -34,12 +36,6 @@ public class UsernameAuthenticator : Authenticator
     /// </summary>
     private void OnReceiveUsernameRequest(NetworkConnection conn, UsernameRequest request, Channel channel)
     {
-        if (conn.IsAuthenticated)
-        {
-            conn.Disconnect(true); // already auth? sus
-            return;
-        }
-
         // verify username
         string username = request.Username?.Trim();
         bool success = !string.IsNullOrWhiteSpace(username) && !_takenUsernames.Contains(username);
@@ -63,6 +59,8 @@ public class UsernameAuthenticator : Authenticator
             Debug.Log(response.Message);
         else
             Debug.LogWarning($"Login failed: {response.Message}");
+        
+        StoryOnAuthenticationResult?.Invoke(response.Success, response.Message);
     }
     
     // cleanup for disconnect

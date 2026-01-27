@@ -28,40 +28,21 @@ public class MenuStory : MonoBehaviour
         _networkManager = InstanceFinder.NetworkManager;
         usernameErrorText.text = "";
         displayIpText.text = "";
+        
+        _networkManager.GetComponent<UsernameAuthenticator>()
+            .StoryOnAuthenticationResult.AddListener(OnUsernameResult);
     }
 
     public void StartHost()
     {
-        // Start Host
+        // Start Host Connection
         _networkManager.ServerManager.StartConnection();
         
         // Show Ip
         displayIpText.text = $"IP: {GetLocalIPv4()}";
         
+        // Start Client Connection
         StartClient();
-        // On Server Start
-        // _networkManager.ServerManager.OnServerConnectionState += args =>
-        // {
-        //     if (args.ConnectionState == LocalConnectionState.Started)
-        //         OnServerStarted();
-        // };
-    }
-
-    private void OnServerStarted()
-    {
-        // Spawn wind manager on the server, so it persist across scenes
-        if (_networkManager != null && _networkManager.IsServerStarted)
-        {
-            if (WindManager.Instance != null)
-                return;
-            
-            var wind = Instantiate(windManagerPrefab);
-            _networkManager.ServerManager.Spawn(wind);
-        }
-        
-        // self username
-        var username = usernameField.text;
-        // StartCoroutine(WaitConnectedThenRequestUsername(username));
     }
 
     public void StartClient()
@@ -116,29 +97,22 @@ public class MenuStory : MonoBehaviour
 
     private void OnUsernameResult(bool available, string message)
     {
-        Debug.Log($"bro {message}");
-        // Unsubscribe from event
-        if (WindManager.Instance)
-            WindManager.Instance.OnUsernameResult -= OnUsernameResult;
-        
         _isConnecting = false;
 
-        // unavailable
         if (!available)
         {
-            Debug.Log("Bad");
+            Debug.Log("bad: " + message);
             usernameErrorText.text = message;
             
             // disconnect if username is bad
             if (_networkManager != null)
                 _networkManager.ClientManager.StopConnection();
-            
         }
         
-        // available
         if (available)
         {
-            Debug.Log("Good");
+            Debug.Log("good: " + message);
+            
             // Confirm username locally
             PlayerWindManager.ChosenUsername = usernameField.text.Trim();
             usernameErrorText.text = "Connection Successful";
