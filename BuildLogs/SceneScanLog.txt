@@ -1,4 +1,113 @@
 ==== SCENE DEBUG START ====
+Scene: Assets/Game/Menu.unity
+- Main Camera
+  * Component: UnityEngine.Transform
+  * Component: UnityEngine.Camera
+  * Component: UnityEngine.AudioListener
+- Directional Light
+  * Component: UnityEngine.Transform
+  * Component: UnityEngine.Light
+  * Component: UnityEngine.Rendering.Universal.UniversalAdditionalLightData
+- Canvas
+  * Component: UnityEngine.RectTransform
+  * Component: UnityEngine.Canvas
+  * Component: UnityEngine.UI.CanvasScaler
+  * Component: UnityEngine.UI.GraphicRaycaster
+  - Username
+    * Component: UnityEngine.RectTransform
+    - Username Text
+      * Component: UnityEngine.RectTransform
+      * Component: UnityEngine.CanvasRenderer
+      * Component: TMPro.TextMeshProUGUI
+    - Username Field
+      * Component: UnityEngine.RectTransform
+      * Component: UnityEngine.CanvasRenderer
+      * Component: UnityEngine.UI.Image
+      * Component: TMPro.TMP_InputField
+      - Text Area
+        * Component: UnityEngine.RectTransform
+        * Component: UnityEngine.UI.RectMask2D
+        - Placeholder
+          * Component: UnityEngine.RectTransform
+          * Component: UnityEngine.CanvasRenderer
+          * Component: TMPro.TextMeshProUGUI
+          * Component: UnityEngine.UI.LayoutElement
+        - Text
+          * Component: UnityEngine.RectTransform
+          * Component: UnityEngine.CanvasRenderer
+          * Component: TMPro.TextMeshProUGUI
+    - TakenBackground
+      * Component: UnityEngine.RectTransform
+      * Component: UnityEngine.CanvasRenderer
+      * Component: UnityEngine.UI.Image
+      - Taken
+        * Component: UnityEngine.RectTransform
+        * Component: UnityEngine.CanvasRenderer
+        * Component: TMPro.TextMeshProUGUI
+  - Ip
+    * Component: UnityEngine.RectTransform
+    - Ip Text
+      * Component: UnityEngine.RectTransform
+      * Component: UnityEngine.CanvasRenderer
+      * Component: TMPro.TextMeshProUGUI
+    - Ip Field
+      * Component: UnityEngine.RectTransform
+      * Component: UnityEngine.CanvasRenderer
+      * Component: UnityEngine.UI.Image
+      * Component: TMPro.TMP_InputField
+      - Text Area
+        * Component: UnityEngine.RectTransform
+        * Component: UnityEngine.UI.RectMask2D
+        - Placeholder
+          * Component: UnityEngine.RectTransform
+          * Component: UnityEngine.CanvasRenderer
+          * Component: TMPro.TextMeshProUGUI
+          * Component: UnityEngine.UI.LayoutElement
+        - Text
+          * Component: UnityEngine.RectTransform
+          * Component: UnityEngine.CanvasRenderer
+          * Component: TMPro.TextMeshProUGUI
+  - Host
+    * Component: UnityEngine.RectTransform
+    * Component: UnityEngine.CanvasRenderer
+    * Component: UnityEngine.UI.Image
+    * Component: UnityEngine.UI.Button
+    - Text (TMP)
+      * Component: UnityEngine.RectTransform
+      * Component: UnityEngine.CanvasRenderer
+      * Component: TMPro.TextMeshProUGUI
+  - Client
+    * Component: UnityEngine.RectTransform
+    * Component: UnityEngine.CanvasRenderer
+    * Component: UnityEngine.UI.Image
+    * Component: UnityEngine.UI.Button
+    - Text (TMP)
+      * Component: UnityEngine.RectTransform
+      * Component: UnityEngine.CanvasRenderer
+      * Component: TMPro.TextMeshProUGUI
+  - Display Server Ip
+    * Component: UnityEngine.RectTransform
+    * Component: UnityEngine.CanvasRenderer
+    * Component: UnityEngine.UI.Image
+    - Display IP Text
+      * Component: UnityEngine.RectTransform
+      * Component: UnityEngine.CanvasRenderer
+      * Component: TMPro.TextMeshProUGUI
+- EventSystem
+  * Component: UnityEngine.Transform
+  * Component: UnityEngine.EventSystems.EventSystem
+  * Component: UnityEngine.InputSystem.UI.InputSystemUIInputModule
+- Prefab Indexer
+  * Component: UnityEngine.Transform
+  * Component: Framework.Utils.UnityPlayModeSaverSceneUtils
+- MenuStory
+  * Component: UnityEngine.Transform
+  * Component: MenuStory
+- NetworkManager
+  * Component: UnityEngine.Transform
+  * Component: FishNet.Managing.NetworkManager
+  * Component: FishNet.Managing.Observing.ObserverManager
+  * Component: UsernameAuthenticator
 Scene: Assets/Game/game.unity
 - Settings
   * Component: UnityEngine.Transform
@@ -66,6 +175,14 @@ Scene: Assets/Game/game.unity
     * Component: UnityEngine.Transform
   - SpawnPoint (2)
     * Component: UnityEngine.Transform
+  - SpawnPoint (3)
+    * Component: UnityEngine.Transform
+  - SpawnPoint (4)
+    * Component: UnityEngine.Transform
+  - SpawnPoint (5)
+    * Component: UnityEngine.Transform
+  - SpawnPoint (6)
+    * Component: UnityEngine.Transform
 - World
   * Component: UnityEngine.Transform
   - Ground
@@ -106,6 +223,12 @@ Scene: Assets/Game/game.unity
     * Component: UnityEngine.BoxCollider
     * Component: UnityEngine.ProBuilder.ProBuilderMesh
   - Cube (2)
+    * Component: UnityEngine.Transform
+    * Component: UnityEngine.MeshFilter
+    * Component: UnityEngine.MeshRenderer
+    * Component: UnityEngine.BoxCollider
+    * Component: UnityEngine.ProBuilder.ProBuilderMesh
+  - Cube (16)
     * Component: UnityEngine.Transform
     * Component: UnityEngine.MeshFilter
     * Component: UnityEngine.MeshRenderer

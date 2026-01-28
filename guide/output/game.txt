@@ -13,6 +13,8 @@ structure:
       - PlayerChest.prefab
       - PlayerChest.prefab.meta
       - Resources.meta
+      - Wind.prefab
+      - Wind.prefab.meta
       - WindManager.prefab
       - WindManager.prefab.meta
     - Resources
@@ -43,8 +45,14 @@ structure:
         - LeaderboardPlayerScore.cs
         - LeaderboardPlayerScore.cs.meta
     - Menu
+        - AuthenticationRequests.cs
+        - AuthenticationRequests.cs.meta
         - PlayerWindManager.cs
         - PlayerWindManager.cs.meta
+        - UsernameAuthenticator.cs
+        - UsernameAuthenticator.cs.meta
+        - Wind.cs
+        - Wind.cs.meta
         - WindManager.cs
         - WindManager.cs.meta
   - game_Blocks
@@ -106,7 +114,7 @@ public class ChestMultiplayerExtension : NetworkBehaviour
     
     // On Join Game
     [TargetRpc]
-    public void FetchExistingLeaderboard(NetworkConnection conn, Dictionary<int, int> leaderboard)
+    public void FetchExistingLeaderboard(NetworkConnection conn, Dictionary<string, int> leaderboard)
     {
         Leaderboard.Instance.UpdateLeaderboard(leaderboard);
     }
@@ -148,36 +156,64 @@ public class ChestStory : NetworkBehaviour
     [SerializeField] private float respawnTime = 5f;
     private MultiplayerManager _mm;
     
-    // Connection
-    private readonly HashSet<string> _takenUsernames = new();
-    
     // ---- Combat ----
-    private readonly Dictionary<int, int> _playerScores = new ();
+    private readonly Dictionary<string, int> _playerScores = new ();
 
     private void Start()
     {
         // subscribe to client connection events
         _mm = MultiplayerManager.Instance;
-        _mm.OnClientConnected += OnClientConnected;
+        _mm.OnClientLoaded += OnClientLoaded;
         _mm.OnClientDisconnected += OnClientDisconnected;
+        
+        // setup for host
+        if (NetworkManager.IsHostStarted)
+        {
+            NetworkManager.ClientManager.Connection.OnLoadedStartScenes += (connection, b) =>
+                OnHostConnected(NetworkManager.ClientManager.Connection);
+        }
     }
 
     private void OnDestroy()
     {
         // unsubscribe client connection events
-        _mm.OnClientConnected -= OnClientConnected;
+        _mm.OnClientLoaded -= OnClientLoaded;
         _mm.OnClientDisconnected -= OnClientDisconnected;
     }
 
-    private void OnClientConnected(NetworkConnection connection)
+    /// <summary>
+    /// this gets called for anyone that joins but host.
+    /// </summary>
+    /// <param name="connection"></param>
+    private void OnClientLoaded(NetworkConnection connection)
     {
         // Setup new player
         var newPlayer = SpawnPlayer(connection);
         
         // Leaderboard
-        _playerScores.Add(connection.ClientId, 0);                  // update on server
-        UpdateLeaderboardRpc(connection.ClientId);                  // update on existing clients
-        newPlayer.FetchExistingLeaderboard(connection, _playerScores); // update on connected client
+        if (Wind.Instance.TryGetUsernameForId(connection.ClientId, out var newPlayerUsername))
+        {
+            _playerScores.Add(newPlayerUsername, 0);                       // update on server
+            AddPlayerToLeaderboardRpc(newPlayerUsername);                  // update on existing clients
+            newPlayer.FetchExistingLeaderboard(connection, _playerScores); // update on connected client
+        }
+        else
+            Debug.LogError("username not found for id: " + connection.ClientId);
+    }
+
+    private void OnHostConnected(NetworkConnection connection)
+    {
+        // Setup new player
+        SpawnPlayer(connection);
+        
+        // Leaderboard
+        if (Wind.Instance.TryGetUsernameForId(connection.ClientId, out var newPlayerUsername))
+        {
+            _playerScores.Add(newPlayerUsername, 0);                       // update on server
+            AddPlayerToLeaderboardRpc(newPlayerUsername);                  // update on host
+        }
+        else
+            Debug.LogError("username not found for id: " + connection.ClientId);
     }
 
     private void OnClientDisconnected(NetworkConnection connection)
@@ -218,37 +254,6 @@ public class ChestStory : NetworkBehaviour
     }
     
     // --------------------------
-    // Connection
-    // --------------------------
-    [ServerRpc]
-    public void RequestUsername(string requestedName, NetworkConnection conn = null)
-    {
-        string finalName = MakeUnique(requestedName);
-        _takenUsernames.Add(finalName);
-
-        SetUsernameRpc(conn, finalName);
-    }
-    
-    private string MakeUnique(string baseName)
-    {
-        if (!_takenUsernames.Contains(baseName))
-            return baseName;
-
-        int i = 1;
-        while (_takenUsernames.Contains($"{baseName} {i}"))
-            i++;
-
-        return $"{baseName} {i}";
-    }
-    
-    [TargetRpc]
-    private void SetUsernameRpc(NetworkConnection conn, string finalName)
-    {
-        // Player.Local.Username = finalName;
-        Debug.Log("my username: " + finalName);
-    }
-    
-    // --------------------------
     // Player combat events
     // --------------------------
     [Server]
@@ -257,13 +262,17 @@ public class ChestStory : NetworkBehaviour
         var player = Player.GetPlayer(killedPlayerId);
         if (!player)
             return;
-
-        _playerScores[shootingPlayerId] += 1;
         
-        UpdateLeaderboardRpc(
-            shootingPlayerId,
-            killedPlayerId,
-            _playerScores[shootingPlayerId]);
+        if (!Wind.Instance.TryGetUsernameForId(shootingPlayerId, out var shootingPlayerUsername)
+            || !Wind.Instance.TryGetUsernameForId(shootingPlayerId, out var shotPlayerUsername))
+            return;
+        
+        _playerScores[shootingPlayerUsername] += 1;
+        
+        UpdateLeaderboardScoreRpc(
+            shootingPlayerUsername,
+            shotPlayerUsername,
+            _playerScores[shootingPlayerUsername]);
 
         // disable player input on the client
         var handler = player.GetComponent<ChestMultiplayerExtension>();
@@ -271,7 +280,7 @@ public class ChestStory : NetworkBehaviour
     }
 
     [ObserversRpc]
-    private void UpdateLeaderboardRpc(int shooting, int shot, int shootingKillCount)
+    private void UpdateLeaderboardScoreRpc(string shooting, string shot, int shootingKillCount)
     {
         Debug.Log($"{shooting} shot {shot}.");
         Leaderboard.Instance.UpdateCount(shooting, shootingKillCount);
@@ -324,10 +333,9 @@ public class ChestStory : NetworkBehaviour
     
     // for existing players
     [ObserversRpc]
-    private void UpdateLeaderboardRpc(int playerId)
+    private void AddPlayerToLeaderboardRpc(string playerUsername)
     {
-        Debug.Log($"man {playerId}");
-        Leaderboard.Instance.AddPlayerToLeaderboard(playerId);
+        Leaderboard.Instance.AddPlayerToLeaderboard(playerUsername);
     }
 }
 ```
@@ -339,8 +347,10 @@ using System.Net.Sockets;
 using FishNet;
 using FishNet.Managing;
 using FishNet.Managing.Scened;
+using FishNet.Object;
 using FishNet.Transporting;
 using UnityEngine;
+using UnityEngine.LowLevelPhysics;
 
 public class MenuStory : MonoBehaviour
 {
@@ -354,6 +364,7 @@ public class MenuStory : MonoBehaviour
     
     private NetworkManager _networkManager;
     
+    private string _chosenUsername;
     private bool _isConnecting;
 
     private void Awake()
@@ -361,113 +372,92 @@ public class MenuStory : MonoBehaviour
         _networkManager = InstanceFinder.NetworkManager;
         usernameErrorText.text = "";
         displayIpText.text = "";
+        
+        _networkManager.GetComponent<UsernameAuthenticator>()
+            .StoryOnAuthenticationResult.AddListener(OnUsernameResult);
     }
 
     public void StartHost()
     {
-        // Start Host
+        // server initialized
+        _networkManager.ServerManager.OnServerConnectionState += ServerManager_OnOnServerConnectionState;
+        
+        // Start Host Connection
         _networkManager.ServerManager.StartConnection();
-        _networkManager.ClientManager.StartConnection();
         
         // Show Ip
         displayIpText.text = $"IP: {GetLocalIPv4()}";
-
-        // On Server Start
-        _networkManager.ServerManager.OnServerConnectionState += args =>
-        {
-            if (args.ConnectionState == LocalConnectionState.Started)
-                OnServerStarted();
-        };
+        
+        // Start Client Connection
+        StartClient();
     }
 
-    private void OnServerStarted()
+    private void ServerManager_OnOnServerConnectionState(ServerConnectionStateArgs args)
     {
-        // Spawn wind manager on the server, so it persist across scenes
-        if (_networkManager != null && _networkManager.IsServerStarted)
-        {
-            if (WindManager.Instance != null)
-                return;
-            
-            var wind = Instantiate(windManagerPrefab);
-            _networkManager.ServerManager.Spawn(wind);
-        }
+        if (args.ConnectionState != LocalConnectionState.Started)
+            return;
         
-        // self username
-        var username = usernameField.text;
-        StartCoroutine(WaitConnectedThenRequestUsername(username));
+        // Load game scene for all clients
+        SceneLoadData sceneLoadData = new SceneLoadData("game") {
+            ReplaceScenes = ReplaceOption.All
+        };
+        _networkManager.SceneManager.LoadGlobalScenes(sceneLoadData);
     }
 
     public void StartClient()
     {
-        // Guard connecting
+        // Guard connection attempt
         if (_isConnecting) return;
         _isConnecting = true;
         
         // collect ip and username data
+        string ip = ipField.text;
+        if (string.IsNullOrEmpty(ip))
+        {
+            Debug.Log("ip can't be empty!");
+            return;
+        }
+        _chosenUsername = usernameField.text.Trim();
         usernameErrorText.text = "";
-        
-        string ip = ipField.text.Trim();
-        string username = usernameField.text.Trim();
 
         // verify username
-        if (string.IsNullOrEmpty(username))
+        if (string.IsNullOrEmpty(_chosenUsername))
         {
             usernameErrorText.text = "Username is empty.";
             _isConnecting = false;
             return;
         }
-
-        // wait for server to approve username
-        _networkManager.ClientManager.OnClientConnectionState += args =>
-        {
-            if (args.ConnectionState == LocalConnectionState.Started)
-                StartCoroutine(WaitConnectedThenRequestUsername(username));
-        };
         
-        // actually connect to server
+        // request username from server
+        _networkManager.ClientManager.OnClientConnectionState += OnClientConnectionState;
         _networkManager.ClientManager.StartConnection(ip);
     }
 
-    /// <summary>
-    /// wait until fully connected and request username
-    /// </summary>
-    public IEnumerator WaitConnectedThenRequestUsername(string username)
+    private void OnClientConnectionState(ClientConnectionStateArgs args)
     {
-        // Wait until connected
-        Debug.Log("Waiting for connection");
-        while (_networkManager && !_networkManager.IsClientStarted)
-            yield return null;
-        
-        // wait until wind manager spawns for the client
-        Debug.Log("Waiting for Wind");
-        while (!WindManager.Instance || !WindManager.Instance.IsSpawned)
-            yield return null;
-        
-        // wait for client to start
-        Debug.Log("Waiting for Client to start");
-        while (_networkManager && !WindManager.Instance.IsClientInitialized)
-            yield return null;
-        
-        // if aborted
-        if (!_networkManager || !_networkManager.IsClientStarted) yield break;
-        
-        // Subscribe to username result
-        WindManager.Instance.OnUsernameResult -= OnUsernameResult;
-        WindManager.Instance.OnUsernameResult += OnUsernameResult;
-        
-        // Request username from server
-        WindManager.Instance.CheckUsernameServer(username);
+        if (args.ConnectionState == LocalConnectionState.Started)
+        {
+            // auto approve host
+            if (InstanceFinder.IsHostStarted)
+            {
+                Debug.Log("oh, host! auto approved.");
+                return;
+            }
+            
+            // send username request to server
+            UsernameRequest req = new() { Username = _chosenUsername };
+            InstanceFinder.ClientManager.Broadcast(req);
+        }
+        else if (args.ConnectionState == LocalConnectionState.Stopped)
+        {
+            Debug.Log("Disconnected (probably rejected)");
+        }
     }
 
     private void OnUsernameResult(bool available, string message)
     {
-        // Unsubscribe from event
-        if (WindManager.Instance)
-            WindManager.Instance.OnUsernameResult -= OnUsernameResult;
-        
         _isConnecting = false;
 
-        // unavailable
         if (!available)
         {
             usernameErrorText.text = message;
@@ -477,19 +467,11 @@ public class MenuStory : MonoBehaviour
                 _networkManager.ClientManager.StopConnection();
         }
         
-        // available
         if (available)
         {
             // Confirm username locally
             PlayerWindManager.ChosenUsername = usernameField.text.Trim();
             usernameErrorText.text = "Connection Successful";
-            
-            // Load scene for new client
-            SceneLoadData sceneLoadData = new SceneLoadData("game") {
-                ReplaceScenes = ReplaceOption.All
-            };
-            
-            _networkManager.SceneManager.LoadGlobalScenes(sceneLoadData);
         }
     }
 
@@ -646,7 +628,8 @@ using UnityEngine;
 
 public class Leaderboard : MonoBehaviour
 {
-    private readonly Dictionary<int, LeaderboardCard> _cards = new ();
+    // leaderboard: username, score
+    private readonly Dictionary<string, LeaderboardCard> _cards = new ();
     
     #region Singleton
     
@@ -668,8 +651,8 @@ public class Leaderboard : MonoBehaviour
     /// <summary>
     /// For existing players, add this new player to the leaderboard
     /// </summary>
-    /// <param name="playerId">new player id</param>
-    public void AddPlayerToLeaderboard(int playerId)
+    /// <param name="playerUsername">new player username</param>
+    public void AddPlayerToLeaderboard(string playerUsername)
     {
         var cardObject = Resources.Load<LeaderboardCard>("LeaderboardCard");
         if (!cardObject)
@@ -679,17 +662,17 @@ public class Leaderboard : MonoBehaviour
         }
         
         var spawnedCard = Instantiate(cardObject, transform);
-        spawnedCard.SetPlayerNameText($"Player {playerId}");
+        spawnedCard.SetPlayerNameText(playerUsername);
         spawnedCard.SetPlayerScoreText("0");
         
-        _cards.Add(playerId, spawnedCard);
+        _cards.Add(playerUsername, spawnedCard);
     }
 
     /// <summary>
     /// for the new player, give the full leaderboard including himself.
     /// </summary>
     /// <param name="updatedBoard">all connected players, including myself (new player)</param>
-    public void UpdateLeaderboard(Dictionary<int, int> updatedBoard)
+    public void UpdateLeaderboard(Dictionary<string, int> updatedBoard)
     {
         // add existing
         foreach (var player in updatedBoard)
@@ -699,11 +682,11 @@ public class Leaderboard : MonoBehaviour
         }
     }
     
-    public void UpdateCount(int playerId, int count)
+    public void UpdateCount(string playerUsername, int count)
     {
-        if (!_cards.TryGetValue(playerId, out var card))
+        if (!_cards.TryGetValue(playerUsername, out var card))
         {
-            Debug.LogError($"{nameof(Leaderboard)}: Player {playerId} not found.");
+            Debug.LogError($"{nameof(Leaderboard)}: Player {playerUsername} not found.");
             return;
         }
         
@@ -778,6 +761,24 @@ public class LeaderboardPlayerScore : MonoBehaviour
 }
 ```
 
+```Scripts\Menu\AuthenticationRequests.cs
+using FishNet.Broadcast;
+using FishNet.Serializing;
+
+[System.Serializable]
+public struct UsernameRequest : IBroadcast
+{
+    public string Username;
+}
+
+[System.Serializable]
+public struct UsernameResponse : IBroadcast
+{
+    public bool Success;
+    public string Message;
+}
+```
+
 ```Scripts\Menu\PlayerWindManager.cs
 using System;
 using UnityEngine;
@@ -814,18 +815,171 @@ public class PlayerWindManager : MonoBehaviour
 }
 ```
 
+```Scripts\Menu\UsernameAuthenticator.cs
+using System;
+using System.Collections.Generic;
+using FishNet;
+using FishNet.Authenticating;
+using FishNet.Connection;
+using FishNet.Managing;
+using FishNet.Transporting;
+using UnityEngine;
+using UnityEngine.Events;
+
+public class UsernameAuthenticator : Authenticator
+{
+    public override event Action<NetworkConnection, bool> OnAuthenticationResult;
+    public UnityEvent<bool, string> StoryOnAuthenticationResult = new ();
+    
+    private readonly HashSet<string> _takenUsernames = new (StringComparer.OrdinalIgnoreCase);
+
+    private void Awake()
+    {
+        DontDestroyOnLoad(gameObject);
+    }
+
+    public override void InitializeOnce(NetworkManager networkManager)
+    {
+        base.InitializeOnce(networkManager);
+        
+        // Server: listen for username requests
+        networkManager.ServerManager.RegisterBroadcast<UsernameRequest>(OnReceiveUsernameRequest, false);
+        
+        // client: listen for result
+        networkManager.ClientManager.RegisterBroadcast<UsernameResponse>(OnReceiveResponse);
+    }
+    
+    /// <summary>
+    /// Server: receives username request from client
+    /// </summary>
+    private void OnReceiveUsernameRequest(NetworkConnection conn, UsernameRequest request, Channel channel)
+    {
+        // verify username
+        string username = request.Username?.Trim();
+        bool success = !string.IsNullOrWhiteSpace(username) && !_takenUsernames.Contains(username);
+        if (success)
+        {
+            _takenUsernames.Add(username);
+            conn.CustomData = username;
+            Wind.Instance.AddPlayer(conn.ClientId, username);
+        }
+        
+        string message = success ? "Connection Success"  : "Username taken or invalid!";
+        
+        // response with the result
+        UsernameResponse response = new () { Success = success, Message = message };
+        InstanceFinder.ServerManager.Broadcast(conn, response, false);
+        
+        // approve / reject connection
+        OnAuthenticationResult?.Invoke(conn, success);
+    }
+    
+    // client: receives result
+    private void OnReceiveResponse(UsernameResponse response, Channel channel)
+    {
+        if (response.Success)
+            Debug.Log(response.Message);
+        else
+            Debug.LogWarning($"Login failed: {response.Message}");
+        
+        StoryOnAuthenticationResult?.Invoke(response.Success, response.Message);
+    }
+    
+    // cleanup for disconnect
+    private void OnEnable()
+    {
+        InstanceFinder.ServerManager.OnRemoteConnectionState += ServerManager_OnOnRemoteConnectionState;
+    }
+
+    private void OnDisable()
+    {
+        if (InstanceFinder.ServerManager != null)
+            InstanceFinder.ServerManager.OnRemoteConnectionState -= ServerManager_OnOnRemoteConnectionState;
+    }
+
+    private void ServerManager_OnOnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+    {
+        if (args.ConnectionState == RemoteConnectionState.Stopped && conn.CustomData is string username)
+        {
+            _takenUsernames.Remove(username);
+            Wind.Instance.RemovePlayer(conn.ClientId);
+        }
+    }
+}
+```
+
+```Scripts\Menu\Wind.cs
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Events;
+
+/// <summary>
+/// Moves player data between scenes
+/// </summary>
+public class Wind : MonoBehaviour
+{
+    #region Singleton
+
+    public static Wind Instance { get; private set; }
+    
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this) Instance = null;
+    }
+
+    #endregion
+
+    public UnityEvent<string> OnClientApproved = new ();
+    public UnityEvent<int> OnClientLeave = new ();
+
+    private Dictionary<int, string> _playerUsernames = new();
+
+    public void AddPlayer(int id, string username)
+    {
+        if (!_playerUsernames.TryAdd(id, username))
+            Debug.LogError("id already exists in Wind's usernames!");
+        
+        OnClientApproved?.Invoke(username);
+    }
+
+    public void RemovePlayer(int id)
+    {
+        if (!_playerUsernames.Remove(id))
+            Debug.LogError("id does not exist in Wind's usernames!");
+        
+        OnClientLeave?.Invoke(id);
+    }
+
+    public bool TryGetUsernameForId(int playerId, out string username)
+    {
+        return _playerUsernames.TryGetValue(playerId, out username);
+    }
+}
+```
+
 ```Scripts\Menu\WindManager.cs
 using System.Collections.Generic;
-using FishNet.Connection;
 using FishNet.Object;
-using UnityEngine.Events;
 
 /// <summary>
 /// What goes between scenes in a multiplayer environment
 /// </summary>
 public class WindManager : NetworkBehaviour
 {
-    private readonly HashSet<string> _taken = new();
+    private readonly HashSet<string> _usernames = new();
     public static WindManager Instance { get; private set; }
 
     #region Singleton
@@ -850,43 +1004,9 @@ public class WindManager : NetworkBehaviour
 
     #endregion
     
-    // --------------------------
-    // Username check
-    // --------------------------
-    public UnityAction<bool, string> OnUsernameResult; // client gets result
+    public void AddUsername(string username) => _usernames.Add(username);
     
-    public void CheckUsernameServer(string username) => CheckUsernameServerRpc(username);
-    
-    [ServerRpc(RequireOwnership = false)]
-    private void CheckUsernameServerRpc(string requestedName, NetworkConnection conn = null)
-    {
-        if (conn == null || !conn.IsValid)
-            return;
-        
-        requestedName = (requestedName ?? "").Trim();
-
-        if (string.IsNullOrEmpty(requestedName))
-        {
-            UsernameResultTargetRpc(conn, false, "Username is empty");
-            return;
-        }
-
-        if (_taken.Contains(requestedName))
-        {
-            UsernameResultTargetRpc(conn, false, "Username already taken in requested server");
-            return;
-        }
-        
-        _taken.Add(requestedName);
-        UsernameResultTargetRpc(conn, true, "");
-    }
-
-    [TargetRpc]
-    private void UsernameResultTargetRpc(NetworkConnection conn, bool available, string message)
-    {
-        // Menu story will listen to this
-        OnUsernameResult?.Invoke(available, message);
-    }
+    public void RemoveUsername(string username) => _usernames.Remove(username);
 }
 ```
 
