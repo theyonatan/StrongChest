@@ -2,11 +2,14 @@ using System.Collections.Generic;
 using System.Linq;
 using FishNet;
 using FishNet.Connection;
+using FishNet.Managing.Scened;
 using FishNet.Object;
+using FishNet.Transporting;
 using UnityEngine;
 
 public class ChestStory : MonoBehaviour
 {
+    ///<summary>data about each player via ClientId</summary>
     private Dictionary<int, OnlinePlayerData> _players = new ();
     private ChestGameManager _gameManager;
     
@@ -19,8 +22,18 @@ public class ChestStory : MonoBehaviour
         _players = new Dictionary<int, OnlinePlayerData>();
         
         InstanceFinder.SceneManager.OnClientLoadedStartScenes += SceneManager_OnOnClientLoadedStartScenes;
+        InstanceFinder.ServerManager.OnRemoteConnectionState += ServerManager_OnOnRemoteConnectionState;
     }
-    
+
+    private void ServerManager_OnOnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+    {
+        // player left this game scene
+        if (args.ConnectionState == RemoteConnectionState.Stopped)
+        {
+            _players.Remove(conn.ClientId);
+        }
+    }
+
     private void OnDestroy()
     {
         if (InstanceFinder.SceneManager)
@@ -40,7 +53,7 @@ public class ChestStory : MonoBehaviour
 
         if (!isServer)
         {
-            Debug.LogWarning("connection with server loading, not running setup as server.");
+            Debug.Log("connection with server loading, not running setup as server.");
             return;
         }
         
