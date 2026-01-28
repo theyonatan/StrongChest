@@ -1,15 +1,12 @@
 using System.Collections.Generic;
-using FishNet.Connection;
 using FishNet.Object;
-using UnityEngine;
-using UnityEngine.Events;
 
 /// <summary>
 /// What goes between scenes in a multiplayer environment
 /// </summary>
 public class WindManager : NetworkBehaviour
 {
-    private readonly HashSet<string> _taken = new();
+    private readonly HashSet<string> _usernames = new();
     public static WindManager Instance { get; private set; }
 
     #region Singleton
@@ -34,41 +31,7 @@ public class WindManager : NetworkBehaviour
 
     #endregion
     
-    // --------------------------
-    // Username check
-    // --------------------------
-    public UnityAction<bool, string> OnUsernameResult; // client gets result
+    public void AddUsername(string username) => _usernames.Add(username);
     
-    [ServerRpc(RequireOwnership = false)]
-    public void CheckUsernameServerRpc(string requestedName, NetworkConnection conn = null)
-    {
-        if (conn == null || !conn.IsValid)
-            return;
-        
-        requestedName = (requestedName ?? "").Trim();
-
-        Debug.Log("looking for username");
-        if (string.IsNullOrEmpty(requestedName))
-        {
-            UsernameResultTargetRpc(conn, false, "Username is empty");
-            return;
-        }
-
-        if (_taken.Contains(requestedName))
-        {
-            UsernameResultTargetRpc(conn, false, "Username already taken in requested server");
-            return;
-        }
-        
-        Debug.Log("ok approved");
-        _taken.Add(requestedName);
-        UsernameResultTargetRpc(conn, true, "");
-    }
-
-    [TargetRpc]
-    private void UsernameResultTargetRpc(NetworkConnection conn, bool available, string message)
-    {
-        // Menu story will listen to this
-        OnUsernameResult?.Invoke(available, message);
-    }
+    public void RemoveUsername(string username) => _usernames.Remove(username);
 }

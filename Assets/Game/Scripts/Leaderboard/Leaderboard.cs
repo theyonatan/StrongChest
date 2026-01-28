@@ -3,7 +3,8 @@ using UnityEngine;
 
 public class Leaderboard : MonoBehaviour
 {
-    private readonly Dictionary<int, LeaderboardCard> _cards = new ();
+    // leaderboard: username, score
+    private readonly Dictionary<string, LeaderboardCard> _cards = new ();
     
     #region Singleton
     
@@ -23,10 +24,10 @@ public class Leaderboard : MonoBehaviour
     #endregion
 
     /// <summary>
-    /// For existing players, add this new player to the leaderboard
+    /// add new player to the leaderboard
     /// </summary>
-    /// <param name="playerId">new player id</param>
-    public void AddPlayerToLeaderboard(int playerId)
+    /// <param name="playerUsername">new player username</param>
+    private void AddPlayerToLeaderboard(string playerUsername)
     {
         var cardObject = Resources.Load<LeaderboardCard>("LeaderboardCard");
         if (!cardObject)
@@ -36,19 +37,24 @@ public class Leaderboard : MonoBehaviour
         }
         
         var spawnedCard = Instantiate(cardObject, transform);
-        spawnedCard.SetPlayerNameText($"Player {playerId}");
+        spawnedCard.SetPlayerNameText(playerUsername);
         spawnedCard.SetPlayerScoreText("0");
         
-        _cards.Add(playerId, spawnedCard);
+        _cards.Add(playerUsername, spawnedCard);
     }
 
     /// <summary>
     /// for the new player, give the full leaderboard including himself.
     /// </summary>
     /// <param name="updatedBoard">all connected players, including myself (new player)</param>
-    public void UpdateLeaderboard(Dictionary<int, int> updatedBoard)
+    public void RebuildLeaderboard(Dictionary<string, int> updatedBoard)
     {
-        // add existing
+        // Clean Leaderboard
+        foreach (var card in _cards)
+            Destroy(card.Value.gameObject);
+        _cards.Clear();
+        
+        // Rebuild Leaderboard
         foreach (var player in updatedBoard)
         {
             AddPlayerToLeaderboard(player.Key);
@@ -56,11 +62,11 @@ public class Leaderboard : MonoBehaviour
         }
     }
     
-    public void UpdateCount(int playerId, int count)
+    public void UpdateCount(string playerUsername, int count)
     {
-        if (!_cards.TryGetValue(playerId, out var card))
+        if (!_cards.TryGetValue(playerUsername, out var card))
         {
-            Debug.LogError($"{nameof(Leaderboard)}: Player {playerId} not found.");
+            Debug.LogError($"{nameof(Leaderboard)}: Player {playerUsername} not found.");
             return;
         }
         

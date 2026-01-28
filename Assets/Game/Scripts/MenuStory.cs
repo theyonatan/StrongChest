@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using FishNet;
 using FishNet.Managing;
 using FishNet.Managing.Scened;
+using FishNet.Object;
 using FishNet.Transporting;
 using UnityEngine;
 using UnityEngine.LowLevelPhysics;
@@ -35,6 +36,9 @@ public class MenuStory : MonoBehaviour
 
     public void StartHost()
     {
+        // server initialized
+        _networkManager.ServerManager.OnServerConnectionState += ServerManager_OnOnServerConnectionState;
+        
         // Start Host Connection
         _networkManager.ServerManager.StartConnection();
         
@@ -43,6 +47,18 @@ public class MenuStory : MonoBehaviour
         
         // Start Client Connection
         StartClient();
+    }
+
+    private void ServerManager_OnOnServerConnectionState(ServerConnectionStateArgs args)
+    {
+        if (args.ConnectionState != LocalConnectionState.Started)
+            return;
+        
+        // Load game scene for all clients
+        SceneLoadData sceneLoadData = new SceneLoadData("game") {
+            ReplaceScenes = ReplaceOption.All
+        };
+        _networkManager.SceneManager.LoadGlobalScenes(sceneLoadData);
     }
 
     public void StartClient()
@@ -101,7 +117,6 @@ public class MenuStory : MonoBehaviour
 
         if (!available)
         {
-            Debug.Log("bad: " + message);
             usernameErrorText.text = message;
             
             // disconnect if username is bad
@@ -111,18 +126,9 @@ public class MenuStory : MonoBehaviour
         
         if (available)
         {
-            Debug.Log("good: " + message);
-            
             // Confirm username locally
             PlayerWindManager.ChosenUsername = usernameField.text.Trim();
             usernameErrorText.text = "Connection Successful";
-            
-            // Load scene for new client
-            SceneLoadData sceneLoadData = new SceneLoadData("game") {
-                ReplaceScenes = ReplaceOption.All
-            };
-            
-            _networkManager.SceneManager.LoadGlobalScenes(sceneLoadData);
         }
     }
 

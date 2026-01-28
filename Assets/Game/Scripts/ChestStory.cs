@@ -1,78 +1,115 @@
 using System.Collections.Generic;
+using System.Linq;
+using FishNet;
 using FishNet.Connection;
 using FishNet.Object;
-using OverallTimers;
 using UnityEngine;
 
-public class ChestStory : NetworkBehaviour
+public class ChestStory : MonoBehaviour
 {
-    // ---- Network Connection ----
-    [SerializeField] private NetworkObject playerPrefab;
-    [SerializeField] private Transform[] spawnPoints;
-    [SerializeField] private float respawnTime = 5f;
-    private MultiplayerManager _mm;
+    private Dictionary<int, OnlinePlayerData> _players = new ();
+    private ChestGameManager _gameManager;
     
-    // Connection
-    private readonly HashSet<string> _takenUsernames = new();
+    #region NetworkEvents
     
-    // ---- Combat ----
-    private readonly Dictionary<int, int> _playerScores = new ();
-
-    private void Start()
+    [SerializeField] private ChestGameManager chestGameManagerPrefab;
+    
+    void Start()
     {
-        // subscribe to client connection events
-        _mm = MultiplayerManager.Instance;
-        _mm.OnClientConnected += OnClientConnected;
-        _mm.OnClientDisconnected += OnClientDisconnected;
+        _players = new Dictionary<int, OnlinePlayerData>();
+        
+        InstanceFinder.SceneManager.OnClientLoadedStartScenes += SceneManager_OnOnClientLoadedStartScenes;
     }
-
+    
     private void OnDestroy()
     {
-        // unsubscribe client connection events
-        _mm.OnClientConnected -= OnClientConnected;
-        _mm.OnClientDisconnected -= OnClientDisconnected;
+        if (InstanceFinder.SceneManager)
+            InstanceFinder.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnOnClientLoadedStartScenes;
     }
 
-    private void OnClientConnected(NetworkConnection connection)
+    
+    /// <summary>
+    /// This function sets up new clients that join.
+    /// can be called on the client when they finished connecting
+    /// here I only run code from the server (I know the new client finished connecting here)
+    /// - so I can set the new client up and start sending rpc's to it.
+    /// </summary>
+    private void SceneManager_OnOnClientLoadedStartScenes(NetworkConnection conn, bool isServer)
     {
-        // Setup new player
-        var newPlayer = SpawnPlayer(connection);
-        
-        // Leaderboard
-        _playerScores.Add(connection.ClientId, 0);                  // update on server
-        UpdateLeaderboardRpc(connection.ClientId);                  // update on existing clients
-        newPlayer.FetchExistingLeaderboard(connection, _playerScores); // update on connected client
-    }
+        Debug.Log($"New connection {conn.ClientId} joined - Scene load finished.");
 
-    private void OnClientDisconnected(NetworkConnection connection)
-    {
-        // despawn the leaving client object for everyone when he disconnects
-        var players = FindObjectsByType<Player>(FindObjectsSortMode.InstanceID);
-        
-        foreach (var player in players)
+        if (!isServer)
         {
-            if (player.PlayerId != connection.ClientId)
-                continue;
-            
-            _mm.DespawnPlayer(player);
+            Debug.LogWarning("connection with server loading, not running setup as server.");
             return;
         }
+        
+        // verify Host
+        bool isHost = InstanceFinder.ClientManager.Connection.IsHost
+            && conn.IsLocalClient;
+        Debug.Log($"Setting up scene for {(isHost ? "Host" : "Regular Player")}");
+
+        // spawn scene network objects
+        _gameManager = Instantiate(chestGameManagerPrefab);
+        InstanceFinder.ServerManager.Spawn(_gameManager);
+        
+        // Setup Game
+        SetupPlayerInScene(conn);
+    }
+
+    #endregion
+
+    #region GameSetup
+
+    [SerializeField] private NetworkObject playerPrefab;
+    [SerializeField] private Transform[] spawnPoints;
+    
+    private void SetupPlayerInScene(NetworkConnection conn)
+    {
+        if (_players.ContainsKey(conn.ClientId))
+        {
+            Debug.LogWarning($"Client {conn.ClientId} already setup. skipping.");
+            return;
+        }
+            
+        // Spawn Player
+        var newPlayer = SpawnPlayerToGame(conn);
+        var newPlayerReference = newPlayer.GetComponent<Player>();
+        var newPlayerUsername = Wind.Instance.GetUsernameForId(conn.ClientId);
+        
+        // Add to local list
+        OnlinePlayerData newPlayerData = new OnlinePlayerData()
+        {
+            ClientConnection = conn,
+            PlayerReference = newPlayerReference,
+            
+            ChestMultiplayerExtension = newPlayer,
+            Username = newPlayerUsername,
+            Score = 0,
+        };
+        
+        _players.Add(conn.ClientId, newPlayerData);
+        
+        // Leaderboard
+        var leaderboardDict = _players.ToDictionary(
+            k => k.Value.Username,
+            v => v.Value.Score);
+        
+        _gameManager.RebuildLeaderboardRpc(leaderboardDict); // Update leaderboard for all players
     }
     
-    private ChestMultiplayerExtension SpawnPlayer(NetworkConnection connection)
+    private ChestMultiplayerExtension SpawnPlayerToGame(NetworkConnection connection)
     {
         // choose random spawn point to start at
         var spawnPoint = spawnPoints[Random.Range(0, spawnPoints.Length)];
         
-        // spawn new player for everyone when joins (like middle of a match with no timer)
-        var spawnedPlayer = _mm.SpawnPlayer(
+        // spawn new player online
+        var spawnedPlayer = SpawnPlayerOnline(
             connection,
-            playerPrefab,
             spawnPoint.position,
             Quaternion.identity);
         
         spawnedPlayer.PlayerId = connection.ClientId;
-
         var newPlayer = spawnedPlayer.GetComponent<ChestMultiplayerExtension>();
         
         // tell the client to set itself up locally
@@ -80,117 +117,41 @@ public class ChestStory : NetworkBehaviour
 
         return newPlayer;
     }
-    
-    // --------------------------
-    // Connection
-    // --------------------------
-    [ServerRpc]
-    public void RequestUsername(string requestedName, NetworkConnection conn = null)
-    {
-        string finalName = MakeUnique(requestedName);
-        _takenUsernames.Add(finalName);
 
-        SetUsernameRpc(conn, finalName);
-    }
-    
-    private string MakeUnique(string baseName)
-    {
-        if (!_takenUsernames.Contains(baseName))
-            return baseName;
+    #endregion
 
-        int i = 1;
-        while (_takenUsernames.Contains($"{baseName} {i}"))
-            i++;
+    #region PlayerSpawning
 
-        return $"{baseName} {i}";
-    }
-    
-    [TargetRpc]
-    private void SetUsernameRpc(NetworkConnection conn, string finalName)
+    private Player SpawnPlayerOnline(
+        NetworkConnection spawningClientConnection,
+        Vector3 position,
+        Quaternion rotation)
     {
-        // Player.Local.Username = finalName;
-        Debug.Log("my username: " + finalName);
-    }
-    
-    // --------------------------
-    // Player combat events
-    // --------------------------
-    [Server]
-    public void HandlePlayerKilled(int shootingPlayerId, int killedPlayerId)
-    {
-        var player = Player.GetPlayer(killedPlayerId);
-        if (!player)
-            return;
+        if (!playerPrefab || spawningClientConnection == null) return null;
+        Debug.Log($"Spawning Player for client {spawningClientConnection.ClientId}");
 
-        _playerScores[shootingPlayerId] += 1;
+        NetworkObject spawnedPlayer = Instantiate(playerPrefab, position, rotation);
+        InstanceFinder.ServerManager.Spawn(spawnedPlayer, spawningClientConnection);
         
-        UpdateLeaderboardRpc(
-            shootingPlayerId,
-            killedPlayerId,
-            _playerScores[shootingPlayerId]);
+        // Self Authority is given locally.
 
-        // disable player input on the client
-        var handler = player.GetComponent<ChestMultiplayerExtension>();
-        handler.NeutrilizePlayerRpc(handler.Owner);
+        return spawnedPlayer.GetComponent<Player>();
     }
 
-    [ObserversRpc]
-    private void UpdateLeaderboardRpc(int shooting, int shot, int shootingKillCount)
+    public void DespawnPlayer(Player player)
     {
-        Debug.Log($"{shooting} shot {shot}.");
-        Leaderboard.Instance.UpdateCount(shooting, shootingKillCount);
-    }
-
-    public void RespondRespawn(int playerId)
-    {
-        if (!IsServerStarted)
-            return;
+        if (player == null) return;
+        Debug.Log($"Despawning Player for client {player.PlayerId}");
         
-        var player = Player.GetPlayer(playerId);
-        if (!player)
-            return;
-
-        var handler = player.GetComponent<ChestMultiplayerExtension>();
-        var owner = handler.Owner;
-
-        handler.Despawn();
-        StartRespawn(owner);
-    }
-    
-    private void StartRespawn(NetworkConnection conn)
-    {
-        var timer = new CountdownTimer(respawnTime);
-        timer.OnTimerStop += () => RespawnPlayer(conn);
-        timer.Start();
-
-        // tick from story
-        StartCoroutine(TickTimer(timer));
-    }
-    
-    private System.Collections.IEnumerator TickTimer(CountdownTimer timer)
-    {
-        while (!timer.IsFinished)
-        {
-            timer.Tick(Time.deltaTime);
-            yield return null;
-        }
+        InstanceFinder.ServerManager.Despawn(player.gameObject);
     }
 
-    private void RespawnPlayer(NetworkConnection conn)
-    {
-        Debug.Log($"Respawning player {conn.ClientId}");
-        SpawnPlayer(conn);
-    }
+    #endregion
+
+    #region GameCycle
+
+    [SerializeField] private float respawnTime = 5f;
     
-    // --------------------------
-    // Leaderboard
-    // --------------------------
-    
-    // for existing players
-    [ObserversRpc]
-    private void UpdateLeaderboardRpc(int playerId)
-    {
-        Debug.Log($"man {playerId}");
-        Leaderboard.Instance.AddPlayerToLeaderboard(playerId);
-    }
+
+    #endregion
 }

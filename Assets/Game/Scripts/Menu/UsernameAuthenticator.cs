@@ -17,6 +17,9 @@ public class UsernameAuthenticator : Authenticator
 
     private void Awake()
     {
+        _takenUsernames.Clear();
+        StoryOnAuthenticationResult.RemoveAllListeners();
+        
         DontDestroyOnLoad(gameObject);
     }
 
@@ -36,6 +39,14 @@ public class UsernameAuthenticator : Authenticator
     /// </summary>
     private void OnReceiveUsernameRequest(NetworkConnection conn, UsernameRequest request, Channel channel)
     {
+        // can't be already authenticated
+        if (conn.IsAuthenticated)
+        {
+            Debug.LogError("connection already authenticated? possible attack.");
+            conn.Disconnect(true);
+            return;
+        }
+        
         // verify username
         string username = request.Username?.Trim();
         bool success = !string.IsNullOrWhiteSpace(username) && !_takenUsernames.Contains(username);
@@ -43,6 +54,7 @@ public class UsernameAuthenticator : Authenticator
         {
             _takenUsernames.Add(username);
             conn.CustomData = username;
+            Wind.Instance.AddPlayer(conn.ClientId, username);
         }
         
         string message = success ? "Connection Success"  : "Username taken or invalid!";
@@ -81,6 +93,9 @@ public class UsernameAuthenticator : Authenticator
     private void ServerManager_OnOnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
     {
         if (args.ConnectionState == RemoteConnectionState.Stopped && conn.CustomData is string username)
+        {
             _takenUsernames.Remove(username);
+            Wind.Instance.RemovePlayer(conn.ClientId);
+        }
     }
 }

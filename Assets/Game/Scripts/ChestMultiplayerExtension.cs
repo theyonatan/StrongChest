@@ -30,9 +30,9 @@ public class ChestMultiplayerExtension : NetworkBehaviour
     
     // On Join Game
     [TargetRpc]
-    public void FetchExistingLeaderboard(NetworkConnection conn, Dictionary<int, int> leaderboard)
+    public void FetchExistingLeaderboard(NetworkConnection conn, Dictionary<string, int> leaderboard)
     {
-        Leaderboard.Instance.UpdateLeaderboard(leaderboard);
+        Leaderboard.Instance.RebuildLeaderboard(leaderboard);
     }
     
     // On Death
@@ -52,6 +52,6 @@ public class ChestMultiplayerExtension : NetworkBehaviour
     private void RespondRespawnServerRpc()
     {
         var story = FindFirstObjectByType<ChestStory>();
-        story.RespondRespawn(GetComponent<Player>().PlayerId);
+        // story.RespondRespawn(GetComponent<Player>().PlayerId);
     }
 }

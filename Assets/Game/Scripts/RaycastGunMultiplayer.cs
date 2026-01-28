@@ -115,6 +115,6 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
     {
         // Despawn player
         var story = FindFirstObjectByType<ChestStory>();
-        story.HandlePlayerKilled(shootingPlayerId, playerHit.PlayerId);
+        // story.HandlePlayerKilled(shootingPlayerId, playerHit.PlayerId);
     }
 }
