@@ -40,7 +40,10 @@ public class UsernameAuthenticator : Authenticator
         string username = request.Username?.Trim();
         bool success = !string.IsNullOrWhiteSpace(username) && !_takenUsernames.Contains(username);
         if (success)
+        {
             _takenUsernames.Add(username);
+            conn.CustomData = username;
+        }
         
         string message = success ? "Connection Success"  : "Username taken or invalid!";
         
