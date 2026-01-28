@@ -4,6 +4,9 @@ using FishNet.Managing;
 using FishNet.Managing.Logging;
 using FishNet.Transporting;
 using System;
+using System.Collections;
+using System.Collections.Generic;
+using FishNet.Managing.Scened;
 using FishNet.Managing.Transporting;
 using UnityEngine;
 
@@ -38,10 +41,35 @@ namespace FishNet.Example.Authenticating
 
             // Listen for connection state change as client.
             NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+            
+            networkManager.ServerManager.OnServerConnectionState += ServerManager_OnOnServerConnectionState;
+            
             // Listen for broadcast from client. Be sure to set requireAuthentication to false.
             NetworkManager.ServerManager.RegisterBroadcast<PasswordBroadcast>(OnPasswordBroadcast, false);
             // Listen to response from server.
             NetworkManager.ClientManager.RegisterBroadcast<ResponseBroadcast>(OnResponseBroadcast);
+        }
+
+        private void ServerManager_OnOnServerConnectionState(ServerConnectionStateArgs args)
+        {
+            if (args.ConnectionState != LocalConnectionState.Started)
+            {
+                StartCoroutine(OnServerReady());
+            }
+        }
+
+        private IEnumerator OnServerReady()
+        {
+            while (!NetworkManager.IsServerStarted)
+                yield return null;
+            
+            // yield return new WaitForSeconds(2.5f);
+            
+            Debug.Log("started the server!");
+            NetworkManager.SceneManager.LoadGlobalScenes(new SceneLoadData("test")
+            {
+                ReplaceScenes = ReplaceOption.All
+            });
         }
 
         /// <summary>
@@ -73,6 +101,7 @@ namespace FishNet.Example.Authenticating
             NetworkManager.ClientManager.Broadcast(pb);
         }
 
+        private string pass = "a";
         /// <summary>
         /// Received on server when a client sends the password broadcast message.
         /// </summary>
@@ -89,7 +118,16 @@ namespace FishNet.Example.Authenticating
                 return;
             }
 
-            bool correctPassword = pb.Password == _password;
+            StartCoroutine(testHold(conn, pb.Password));
+        }
+
+        private IEnumerator testHold(NetworkConnection conn, string password)
+        {
+            bool correctPassword = password == pass;
+            correctPassword = true;
+
+            yield return new WaitForSeconds(0.1f);
+            
             SendAuthenticationResponse(conn, correctPassword);
             /* Invoke result. This is handled internally to complete the connection or kick client.
              * It's important to call this after sending the broadcast so that the broadcast

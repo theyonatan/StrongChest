@@ -205,7 +205,7 @@ namespace FishNet.Example
             if (_serverState != LocalConnectionState.Stopped)
                 _networkManager.ServerManager.StopConnection(true);
             else
-                _networkManager.ServerManager.StartConnection();
+                _networkManager.ServerManager.StartConnection(7770);
 
             DeselectButtons();
         }
@@ -218,7 +218,7 @@ namespace FishNet.Example
             if (_clientState != LocalConnectionState.Stopped)
                 _networkManager.ClientManager.StopConnection();
             else
-                _networkManager.ClientManager.StartConnection();
+                _networkManager.ClientManager.StartConnection("10.0.0.21", 7770);
 
             DeselectButtons();
         }
