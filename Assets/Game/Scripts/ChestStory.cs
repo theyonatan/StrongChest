@@ -1,8 +1,8 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using FishNet;
 using FishNet.Connection;
-using FishNet.Managing.Scened;
 using FishNet.Object;
 using FishNet.Transporting;
 using UnityEngine;
@@ -10,17 +10,19 @@ using UnityEngine;
 public class ChestStory : MonoBehaviour
 {
     ///<summary>data about each player via ClientId</summary>
-    private Dictionary<int, OnlinePlayerData> _players = new ();
+    private Dictionary<int, OnlinePlayerData> _players = new();
+
+    ///<summary>Network Communication Handler for the game</summary>
     private ChestGameManager _gameManager;
-    
+
     #region NetworkEvents
-    
+
     [SerializeField] private ChestGameManager chestGameManagerPrefab;
-    
+
     void Start()
     {
         _players = new Dictionary<int, OnlinePlayerData>();
-        
+
         InstanceFinder.SceneManager.OnClientLoadedStartScenes += SceneManager_OnOnClientLoadedStartScenes;
         InstanceFinder.ServerManager.OnRemoteConnectionState += ServerManager_OnOnRemoteConnectionState;
     }
@@ -40,7 +42,7 @@ public class ChestStory : MonoBehaviour
             InstanceFinder.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnOnClientLoadedStartScenes;
     }
 
-    
+
     /// <summary>
     /// This function sets up new clients that join.
     /// can be called on the client when they finished connecting
@@ -56,18 +58,18 @@ public class ChestStory : MonoBehaviour
             Debug.Log("connection with server loading, not running setup as server.");
             return;
         }
-        
+
         // verify Host
         bool isHost = InstanceFinder.ClientManager.Connection.IsHost
-            && conn.IsLocalClient;
+                      && conn.IsLocalClient;
         Debug.Log($"Setting up scene for {(isHost ? "Host" : "Regular Player")}");
 
         // spawn scene network objects
         _gameManager = Instantiate(chestGameManagerPrefab);
         InstanceFinder.ServerManager.Spawn(_gameManager);
-        
+
         // Setup Game
-        SetupPlayerInScene(conn);
+        SetupNewPlayer(conn);
     }
 
     #endregion
@@ -76,58 +78,73 @@ public class ChestStory : MonoBehaviour
 
     [SerializeField] private NetworkObject playerPrefab;
     [SerializeField] private Transform[] spawnPoints;
-    
-    private void SetupPlayerInScene(NetworkConnection conn)
+
+    private void SetupNewPlayer(NetworkConnection conn)
     {
+        // verify new
         if (_players.ContainsKey(conn.ClientId))
         {
             Debug.LogWarning($"Client {conn.ClientId} already setup. skipping.");
             return;
         }
-            
+        
+        // Add new to players list
+        OnlinePlayerData newPlayerData = new OnlinePlayerData()
+        {
+            ClientConnection = conn,
+            Score = 0,
+        };
+        _players.Add(conn.ClientId, newPlayerData);
+
         // Spawn Player
         var newPlayer = SpawnPlayerToGame(conn);
         var newPlayerReference = newPlayer.GetComponent<Player>();
         var newPlayerUsername = Wind.Instance.GetUsernameForId(conn.ClientId);
+        newPlayerReference.PlayerId = conn.ClientId;
         
-        // Add to local list
-        OnlinePlayerData newPlayerData = new OnlinePlayerData()
-        {
-            ClientConnection = conn,
-            PlayerReference = newPlayerReference,
-            
-            ChestMultiplayerExtension = newPlayer,
-            Username = newPlayerUsername,
-            Score = 0,
-        };
-        
-        _players.Add(conn.ClientId, newPlayerData);
-        
+        // Update Username of all players
+        _players[conn.ClientId].Username = newPlayerUsername;
+        foreach (var playerHandler in _players.Values)
+            playerHandler.ChestMultiplayerExtension.UpdateUsernameOnPlayer(newPlayerUsername);
+
         // Leaderboard
         var leaderboardDict = _players.ToDictionary(
             k => k.Value.Username,
             v => v.Value.Score);
-        
+
         _gameManager.RebuildLeaderboardRpc(leaderboardDict); // Update leaderboard for all players
     }
-    
+
+    /// <summary>
+    /// Call to spawn a player to the game
+    /// </summary>
+    /// <param name="connection">Connection to own the player</param>
+    /// <returns></returns>
     private ChestMultiplayerExtension SpawnPlayerToGame(NetworkConnection connection)
     {
         // choose random spawn point to start at
         var spawnPoint = spawnPoints[Random.Range(0, spawnPoints.Length)];
-        
+
         // spawn new player online
         var spawnedPlayer = SpawnPlayerOnline(
             connection,
             spawnPoint.position,
             Quaternion.identity);
-        
+
         spawnedPlayer.PlayerId = connection.ClientId;
         var newPlayer = spawnedPlayer.GetComponent<ChestMultiplayerExtension>();
+
+        // save player data
+        _players[connection.ClientId].PlayerReference = spawnedPlayer;
+        _players[connection.ClientId].ChestMultiplayerExtension = newPlayer;
         
         // tell the client to set itself up locally
         newPlayer.SetupFPSPlayerRpc(connection);
-
+        
+        // also set up it's username for everyone
+        var newPlayerUsername = Wind.Instance.GetUsernameForId(connection.ClientId);
+        newPlayer.UpdateUsernameOnPlayer(newPlayerUsername);
+        
         return newPlayer;
     }
 
@@ -135,6 +152,11 @@ public class ChestStory : MonoBehaviour
 
     #region PlayerSpawning
 
+    /// <summary>
+    /// Used to spawn a new player in the scene.
+    /// Should not be called without handling further game context.
+    /// </summary>
+    /// <returns>Player runner</returns>
     private Player SpawnPlayerOnline(
         NetworkConnection spawningClientConnection,
         Vector3 position,
@@ -145,7 +167,7 @@ public class ChestStory : MonoBehaviour
 
         NetworkObject spawnedPlayer = Instantiate(playerPrefab, position, rotation);
         InstanceFinder.ServerManager.Spawn(spawnedPlayer, spawningClientConnection);
-        
+
         // Self Authority is given locally.
 
         return spawnedPlayer.GetComponent<Player>();
@@ -155,7 +177,7 @@ public class ChestStory : MonoBehaviour
     {
         if (player == null) return;
         Debug.Log($"Despawning Player for client {player.PlayerId}");
-        
+
         InstanceFinder.ServerManager.Despawn(player.gameObject);
     }
 
@@ -164,7 +186,55 @@ public class ChestStory : MonoBehaviour
     #region GameCycle
 
     [SerializeField] private float respawnTime = 5f;
-    
 
-    #endregion
+    public void HandlePlayerKilled(int shooterPlayerId, int killedPlayerId)
+    {
+        // verify killed player
+        if (!_players.TryGetValue(killedPlayerId, out var killedPlayer))
+            return;
+
+        // update leaderboard
+        _players[shooterPlayerId].Score += 1;
+        var playerShooterScore = _players[shooterPlayerId].Score;
+        var playerShooterUsername = Wind.Instance.GetUsernameForId(shooterPlayerId);
+        var playerKilledUsername = Wind.Instance.GetUsernameForId(killedPlayerId);
+
+        _gameManager.UpdateLeaderboardScoreRpc(
+            playerShooterUsername,
+            playerKilledUsername,
+            playerShooterScore);
+
+        // Neutralize killed player
+        var handler = killedPlayer.ChestMultiplayerExtension;
+        handler.NeutralizePlayerRpc(killedPlayer.ClientConnection);
+    }
+
+    public void ConfirmNeutralized(int playerId)
+    {
+        var handler = _players[playerId].ChestMultiplayerExtension;
+        var owner = _players[playerId].ClientConnection;
+
+        Debug.Log("what");
+        
+        Debug.Log(_players[playerId].ChestMultiplayerExtension);
+        Debug.Log(_players[playerId].ChestMultiplayerExtension.IsSpawned);
+        Debug.Log(_players[playerId].ChestMultiplayerExtension == null);
+        Debug.Log(_players[playerId].ChestMultiplayerExtension.isActiveAndEnabled);
+        
+        InstanceFinder.ServerManager.Despawn(handler);
+        Debug.Log("not it, right");
+        StartCoroutine(RespawnClient(owner));
+    }
+
+    private IEnumerator RespawnClient(NetworkConnection conn)
+    {
+        // respawn cooldown
+        yield return new WaitForSeconds(respawnTime);
+        
+        Debug.Log("wait");
+        // spawn new player
+        SpawnPlayerToGame(conn);
+    }
+
+#endregion
 }

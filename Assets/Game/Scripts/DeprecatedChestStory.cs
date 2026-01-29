@@ -183,7 +183,7 @@ public class DeprecatedChestStory : NetworkBehaviour
 
         // disable player input on the client
         var handler = player.GetComponent<ChestMultiplayerExtension>();
-        handler.NeutrilizePlayerRpc(handler.Owner);
+        handler.NeutralizePlayerRpc(handler.Owner);
     }
 
     [ObserversRpc]

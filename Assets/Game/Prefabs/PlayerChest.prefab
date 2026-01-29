@@ -146,7 +146,6 @@ MonoBehaviour:
   _componentIndexCache: 2
   _addedNetworkObject: {fileID: 4778891040591171001}
   _networkObjectCache: {fileID: 4778891040591171001}
-  Username: 
 --- !u!114 &5685395334387654109
 MonoBehaviour:
   m_ObjectHideFlags: 0

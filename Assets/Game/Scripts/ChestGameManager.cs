@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class ChestGameManager : NetworkBehaviour
 {
-    #region Leaderboard
+    #region LeaderboardSetup
     
     private Dictionary<string, int> _cachedLeaderboard = new();
     
@@ -13,8 +13,9 @@ public class ChestGameManager : NetworkBehaviour
     {
         Debug.Log($"Leaderboard Rebuild Requested for {leaderboard.Count} Players.");
         Leaderboard.Instance.RebuildLeaderboard(leaderboard);
-        
-        _cachedLeaderboard = leaderboard;
+
+        // Copy to avoid the reference sent over the RPC
+        _cachedLeaderboard = new Dictionary<string, int>(leaderboard);
     }
 
     /// <summary>
@@ -36,6 +37,17 @@ public class ChestGameManager : NetworkBehaviour
         
         Debug.Log($"Leaderboard Rebuild Requested. using cached with {_cachedLeaderboard.Count} Players.");
         RebuildLeaderboardRpc(_cachedLeaderboard);
+    }
+
+    #endregion
+
+    #region LeaderboardUpdate
+
+    [ObserversRpc]
+    public void UpdateLeaderboardScoreRpc(string shooting, string shot, int shootingKillCount)
+    {
+        Debug.Log($"{shooting} shot {shot}.");
+        Leaderboard.Instance.UpdateCount(shooting, shootingKillCount);
     }
 
     #endregion

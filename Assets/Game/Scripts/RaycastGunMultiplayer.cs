@@ -27,6 +27,7 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
     private CountdownTimer respawnTimer;
     private float respawnTime = 5f;
     private int localPlayerId = -1;
+    private bool neutralized;
     
     public void OnEnablePlayer()
     {
@@ -48,6 +49,24 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
         cooldownTimer = new CountdownTimer(maxCooldown);
     }
 
+    public void OnPlayerNeutralized()
+    {
+        Debug.Log("Player Gun Neutralized!");
+        
+        if (!_director)
+            return;
+        if (neutralized)
+            return;
+        neutralized = true;
+        
+        _director.OnFirePressed -= OnFirePressed;
+    }
+
+    public void OnDestroy()
+    {
+        OnPlayerNeutralized();
+    }
+
     public void UpdatePlayer()
     {
         // Multiplayer Guard
@@ -56,6 +75,23 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
         
         respawnTimer?.Tick(Time.deltaTime);
         cooldownTimer?.Tick(Time.deltaTime);
+    }
+    
+    private void OnFirePressed()
+    {
+        // Multiplayer Guard
+        if (!_player.HasAuthority)
+            return;
+        
+        if (!IsClientInitialized || !IsSpawned)
+            return;
+        
+        // If there's still cooldown, don't shoot
+        if (!cooldownTimer.IsFinished) return;
+        cooldownTimer.Reset();
+        cooldownTimer.Start();
+
+        PerformShoot();
     }
 
     private void PerformShoot()
@@ -72,34 +108,20 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
         //     _animationsManager.Play("Shoot");
         // }
 
-        // send rpc to server
+        // request shoot from server
         OnPlayerShootRpc(localPlayerId, cam.position, cam.forward);
-    }
-    
-    private void OnFirePressed()
-    {
-        // Multiplayer Guard
-        if (!_player.HasAuthority)
-            return;
-        
-        // If there's still cooldown, don't shoot
-        if (!cooldownTimer.IsFinished) return;
-        cooldownTimer.Reset();
-        cooldownTimer.Start();
-
-        PerformShoot();
     }
 
     [ServerRpc(RequireOwnership = true)]
     private void OnPlayerShootRpc(int localId, Vector3 camPosition, Vector3 camForward)
     {
+        // calculate on server shoot result
         if (!IsServerStarted)
             return;
         
-        // log for self
-        Debug.Log($"Doing some calculations. from {camPosition} to {camForward}");
+        Debug.Log($"Shooting requested. from {camPosition} to {camForward}");
         
-        // rpc
+        // using raycast gun
         Vector3 origin = camPosition + camForward * 0.65f; // to not hit self
         Ray ray = new Ray(origin, camForward);
 
@@ -115,6 +137,6 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
     {
         // Despawn player
         var story = FindFirstObjectByType<ChestStory>();
-        // story.HandlePlayerKilled(shootingPlayerId, playerHit.PlayerId);
+        story.HandlePlayerKilled(shootingPlayerId, playerHit.PlayerId);
     }
 }

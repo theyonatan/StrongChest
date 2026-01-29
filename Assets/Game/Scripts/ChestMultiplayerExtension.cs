@@ -1,11 +1,11 @@
-using System.Collections.Generic;
 using FishNet.Connection;
 using FishNet.Object;
+using UnityEngine;
 
 public class ChestMultiplayerExtension : NetworkBehaviour
 {
-    public string Username;
-    
+    #region Setup
+
     [TargetRpc]
     public void SetupFPSPlayerRpc(NetworkConnection conn)
     {
@@ -27,31 +27,43 @@ public class ChestMultiplayerExtension : NetworkBehaviour
         
         FindFirstObjectByType<RespawnScreen>().HideScreen();
     }
-    
-    // On Join Game
-    [TargetRpc]
-    public void FetchExistingLeaderboard(NetworkConnection conn, Dictionary<string, int> leaderboard)
+
+    /// <summary>
+    /// for all clients, updates the username on this player.
+    /// </summary>
+    [ObserversRpc]
+    public void UpdateUsernameOnPlayer(string username)
     {
-        Leaderboard.Instance.RebuildLeaderboard(leaderboard);
+        
     }
-    
+
+    #endregion
+
+    #region GameCycle
+
     // On Death
     [TargetRpc]
-    public void NeutrilizePlayerRpc(NetworkConnection conn)
+    public void NeutralizePlayerRpc(NetworkConnection conn)
     {
         var player = GetComponent<Player>();
         player.GetComponent<InputDirector>().DisableInput();
         player.DisablePlayerBehaviors();
         FindFirstObjectByType<RespawnScreen>().ShowScreen();
+        GetComponent<RaycastGunMultiplayer>().OnPlayerNeutralized();
         
         // respond
-        RespondRespawnServerRpc();
+        ConfirmNeutralizedRpc();
     }
     
     [ServerRpc(RequireOwnership = true)]
-    private void RespondRespawnServerRpc()
+    private void ConfirmNeutralizedRpc()
     {
+        if (!IsServerStarted)
+            return;
+        
         var story = FindFirstObjectByType<ChestStory>();
-        // story.RespondRespawn(GetComponent<Player>().PlayerId);
+        story.ConfirmNeutralized(GetComponent<Player>().PlayerId);
     }
+
+    #endregion
 }
