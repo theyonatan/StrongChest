@@ -10,6 +10,10 @@ structure:
   - Prefabs
       - ChestStory.prefab
       - ChestStory.prefab.meta
+      - GameManager.prefab
+      - GameManager.prefab.meta
+      - NetworkManager.prefab
+      - NetworkManager.prefab.meta
       - PlayerChest.prefab
       - PlayerChest.prefab.meta
       - Resources.meta
@@ -23,18 +27,26 @@ structure:
   - Scripts
       - ChestGame.asmdef
       - ChestGame.asmdef.meta
+      - ChestGameManager.cs
+      - ChestGameManager.cs.meta
       - ChestMultiplayerExtension.cs
       - ChestMultiplayerExtension.cs.meta
       - ChestStory.cs
       - ChestStory.cs.meta
+      - DeprecatedChestStory.cs
+      - DeprecatedChestStory.cs.meta
       - Leaderboard.meta
       - Menu.meta
       - MenuStory.cs
       - MenuStory.cs.meta
+      - OnlinePlayerData.cs
+      - OnlinePlayerData.cs.meta
       - RaycastGunMultiplayer.cs
       - RaycastGunMultiplayer.cs.meta
       - RespawnScreen.cs
       - RespawnScreen.cs.meta
+      - SanityStory.cs
+      - SanityStory.cs.meta
     - Leaderboard
         - Leaderboard.cs
         - Leaderboard.cs.meta
@@ -81,15 +93,72 @@ structure:
       - bruh_614428138.txt
       - bruh_614428138.txt.meta
 
-```Scripts\ChestMultiplayerExtension.cs
+```Scripts\ChestGameManager.cs
 using System.Collections.Generic;
+using FishNet.Object;
+using UnityEngine;
+
+public class ChestGameManager : NetworkBehaviour
+{
+    #region LeaderboardSetup
+    
+    private Dictionary<string, int> _cachedLeaderboard = new();
+    
+    [ObserversRpc]
+    public void RebuildLeaderboardRpc(Dictionary<string, int> leaderboard)
+    {
+        Debug.Log($"Leaderboard Rebuild Requested for {leaderboard.Count} Players.");
+        Leaderboard.Instance.RebuildLeaderboard(leaderboard);
+
+        // Copy to avoid the reference sent over the RPC
+        _cachedLeaderboard = new Dictionary<string, int>(leaderboard);
+    }
+
+    /// <summary>
+    /// Sometimes the network object will not spawn in time,
+    /// so we request leaderboard rebuild once we know the object is ready.
+    /// </summary>
+    public override void OnStartClient()
+    {
+        base.OnStartClient();
+        
+        RequestLeaderboardRebuild();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestLeaderboardRebuild()
+    {
+        if (!IsServerStarted)
+            return;
+        
+        Debug.Log($"Leaderboard Rebuild Requested. using cached with {_cachedLeaderboard.Count} Players.");
+        RebuildLeaderboardRpc(_cachedLeaderboard);
+    }
+
+    #endregion
+
+    #region LeaderboardUpdate
+
+    [ObserversRpc]
+    public void UpdateLeaderboardScoreRpc(string shooting, string shot, int shootingKillCount)
+    {
+        Debug.Log($"{shooting} shot {shot}.");
+        Leaderboard.Instance.UpdateCount(shooting, shootingKillCount);
+    }
+
+    #endregion
+}
+```
+
+```Scripts\ChestMultiplayerExtension.cs
 using FishNet.Connection;
 using FishNet.Object;
+using UnityEngine;
 
 public class ChestMultiplayerExtension : NetworkBehaviour
 {
-    public string Username;
-    
+    #region Setup
+
     [TargetRpc]
     public void SetupFPSPlayerRpc(NetworkConnection conn)
     {
@@ -111,17 +180,23 @@ public class ChestMultiplayerExtension : NetworkBehaviour
         
         FindFirstObjectByType<RespawnScreen>().HideScreen();
     }
-    
-    // On Join Game
-    [TargetRpc]
-    public void FetchExistingLeaderboard(NetworkConnection conn, Dictionary<string, int> leaderboard)
+
+    /// <summary>
+    /// for all clients, updates the username on this player.
+    /// </summary>
+    [ObserversRpc]
+    public void UpdateUsernameOnPlayer(string username)
     {
-        Leaderboard.Instance.UpdateLeaderboard(leaderboard);
+        
     }
-    
+
+    #endregion
+
+    #region GameCycle
+
     // On Death
     [TargetRpc]
-    public void NeutrilizePlayerRpc(NetworkConnection conn)
+    public void NeutralizePlayerRpc(NetworkConnection conn)
     {
         var player = GetComponent<Player>();
         player.GetComponent<InputDirector>().DisableInput();
@@ -129,26 +204,276 @@ public class ChestMultiplayerExtension : NetworkBehaviour
         FindFirstObjectByType<RespawnScreen>().ShowScreen();
         
         // respond
-        RespondRespawnServerRpc();
+        ConfirmNeutralizedRpc();
     }
     
     [ServerRpc(RequireOwnership = true)]
-    private void RespondRespawnServerRpc()
+    private void ConfirmNeutralizedRpc()
     {
+        if (!IsServerStarted)
+            return;
+        
         var story = FindFirstObjectByType<ChestStory>();
-        story.RespondRespawn(GetComponent<Player>().PlayerId);
+        story.ConfirmNeutralized(GetComponent<Player>().PlayerId);
     }
+
+    #endregion
 }
 ```
 
 ```Scripts\ChestStory.cs
+using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using FishNet;
+using FishNet.Connection;
+using FishNet.Object;
+using FishNet.Transporting;
+using UnityEngine;
+
+public class ChestStory : MonoBehaviour
+{
+    ///<summary>data about each player via ClientId</summary>
+    private Dictionary<int, OnlinePlayerData> _players = new();
+
+    ///<summary>Network Communication Handler for the game</summary>
+    private ChestGameManager _gameManager;
+
+    #region NetworkEvents
+
+    [SerializeField] private ChestGameManager chestGameManagerPrefab;
+
+    void Start()
+    {
+        _players = new Dictionary<int, OnlinePlayerData>();
+
+        InstanceFinder.SceneManager.OnClientLoadedStartScenes += SceneManager_OnOnClientLoadedStartScenes;
+        InstanceFinder.ServerManager.OnRemoteConnectionState += ServerManager_OnOnRemoteConnectionState;
+    }
+
+    private void ServerManager_OnOnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+    {
+        // player left this game scene
+        if (args.ConnectionState == RemoteConnectionState.Stopped)
+        {
+            _players.Remove(conn.ClientId);
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (InstanceFinder.SceneManager)
+            InstanceFinder.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnOnClientLoadedStartScenes;
+    }
+
+
+    /// <summary>
+    /// This function sets up new clients that join.
+    /// can be called on the client when they finished connecting
+    /// here I only run code from the server (I know the new client finished connecting here)
+    /// - so I can set the new client up and start sending rpc's to it.
+    /// </summary>
+    private void SceneManager_OnOnClientLoadedStartScenes(NetworkConnection conn, bool isServer)
+    {
+        Debug.Log($"New connection {conn.ClientId} joined - Scene load finished.");
+
+        if (!isServer)
+        {
+            Debug.Log("connection with server loading, not running setup as server.");
+            return;
+        }
+
+        // verify Host
+        bool isHost = InstanceFinder.ClientManager.Connection.IsHost
+                      && conn.IsLocalClient;
+        Debug.Log($"Setting up scene for {(isHost ? "Host" : "Regular Player")}");
+
+        // spawn scene network objects
+        _gameManager = Instantiate(chestGameManagerPrefab);
+        InstanceFinder.ServerManager.Spawn(_gameManager);
+
+        // Setup Game
+        SetupNewPlayer(conn);
+    }
+
+    #endregion
+
+    #region GameSetup
+
+    [SerializeField] private NetworkObject playerPrefab;
+    [SerializeField] private Transform[] spawnPoints;
+
+    private void SetupNewPlayer(NetworkConnection conn)
+    {
+        // verify new
+        if (_players.ContainsKey(conn.ClientId))
+        {
+            Debug.LogWarning($"Client {conn.ClientId} already setup. skipping.");
+            return;
+        }
+        
+        // Add new to players list
+        OnlinePlayerData newPlayerData = new OnlinePlayerData()
+        {
+            ClientConnection = conn,
+            Score = 0,
+        };
+        _players.Add(conn.ClientId, newPlayerData);
+
+        // Spawn Player
+        var newPlayer = SpawnPlayerToGame(conn);
+        var newPlayerReference = newPlayer.GetComponent<Player>();
+        var newPlayerUsername = Wind.Instance.GetUsernameForId(conn.ClientId);
+        newPlayerReference.PlayerId = conn.ClientId;
+        
+        // Update Username of all players
+        _players[conn.ClientId].Username = newPlayerUsername;
+        foreach (var playerHandler in _players.Values)
+            playerHandler.ChestMultiplayerExtension.UpdateUsernameOnPlayer(newPlayerUsername);
+
+        // Leaderboard
+        var leaderboardDict = _players.ToDictionary(
+            k => k.Value.Username,
+            v => v.Value.Score);
+
+        _gameManager.RebuildLeaderboardRpc(leaderboardDict); // Update leaderboard for all players
+    }
+
+    /// <summary>
+    /// Call to spawn a player to the game
+    /// </summary>
+    /// <param name="connection">Connection to own the player</param>
+    /// <returns></returns>
+    private ChestMultiplayerExtension SpawnPlayerToGame(NetworkConnection connection)
+    {
+        // choose random spawn point to start at
+        var spawnPoint = spawnPoints[Random.Range(0, spawnPoints.Length)];
+
+        // spawn new player online
+        var spawnedPlayer = SpawnPlayerOnline(
+            connection,
+            spawnPoint.position,
+            Quaternion.identity);
+
+        spawnedPlayer.PlayerId = connection.ClientId;
+        var newPlayer = spawnedPlayer.GetComponent<ChestMultiplayerExtension>();
+
+        // save player data
+        _players[connection.ClientId].PlayerReference = spawnedPlayer;
+        _players[connection.ClientId].ChestMultiplayerExtension = newPlayer;
+        
+        // tell the client to set itself up locally
+        newPlayer.SetupFPSPlayerRpc(connection);
+        
+        // also set up it's username for everyone
+        var newPlayerUsername = Wind.Instance.GetUsernameForId(connection.ClientId);
+        newPlayer.UpdateUsernameOnPlayer(newPlayerUsername);
+        
+        return newPlayer;
+    }
+
+    #endregion
+
+    #region PlayerSpawning
+
+    /// <summary>
+    /// Used to spawn a new player in the scene.
+    /// Should not be called without handling further game context.
+    /// </summary>
+    /// <returns>Player runner</returns>
+    private Player SpawnPlayerOnline(
+        NetworkConnection spawningClientConnection,
+        Vector3 position,
+        Quaternion rotation)
+    {
+        if (!playerPrefab || spawningClientConnection == null) return null;
+        Debug.Log($"Spawning Player for client {spawningClientConnection.ClientId}");
+
+        NetworkObject spawnedPlayer = Instantiate(playerPrefab, position, rotation);
+        InstanceFinder.ServerManager.Spawn(spawnedPlayer, spawningClientConnection);
+
+        // Self Authority is given locally.
+
+        return spawnedPlayer.GetComponent<Player>();
+    }
+
+    public void DespawnPlayer(Player player)
+    {
+        if (player == null) return;
+        Debug.Log($"Despawning Player for client {player.PlayerId}");
+
+        InstanceFinder.ServerManager.Despawn(player.gameObject);
+    }
+
+    #endregion
+
+    #region GameCycle
+
+    [SerializeField] private float respawnTime = 5f;
+
+    public void HandlePlayerKilled(int shooterPlayerId, int killedPlayerId)
+    {
+        // verify killed player
+        if (!_players.TryGetValue(killedPlayerId, out var killedPlayer))
+            return;
+
+        // update leaderboard
+        _players[shooterPlayerId].Score += 1;
+        var playerShooterScore = _players[shooterPlayerId].Score;
+        var playerShooterUsername = Wind.Instance.GetUsernameForId(shooterPlayerId);
+        var playerKilledUsername = Wind.Instance.GetUsernameForId(killedPlayerId);
+
+        _gameManager.UpdateLeaderboardScoreRpc(
+            playerShooterUsername,
+            playerKilledUsername,
+            playerShooterScore);
+
+        // Neutralize killed player
+        var handler = killedPlayer.ChestMultiplayerExtension;
+        handler.NeutralizePlayerRpc(killedPlayer.ClientConnection);
+    }
+
+    public void ConfirmNeutralized(int playerId)
+    {
+        var handler = _players[playerId].ChestMultiplayerExtension;
+        var owner = _players[playerId].ClientConnection;
+
+        Debug.Log("what");
+        
+        Debug.Log(_players[playerId].ChestMultiplayerExtension);
+        Debug.Log(_players[playerId].ChestMultiplayerExtension.IsSpawned);
+        Debug.Log(_players[playerId].ChestMultiplayerExtension == null);
+        Debug.Log(_players[playerId].ChestMultiplayerExtension.isActiveAndEnabled);
+        
+        InstanceFinder.ServerManager.Despawn(handler);
+        Debug.Log("not it, right");
+        StartCoroutine(RespawnClient(owner));
+    }
+
+    private IEnumerator RespawnClient(NetworkConnection conn)
+    {
+        // respawn cooldown
+        yield return new WaitForSeconds(respawnTime);
+        
+        Debug.Log("wait");
+        // spawn new player
+        SpawnPlayerToGame(conn);
+    }
+
+#endregion
+}
+```
+
+```Scripts\DeprecatedChestStory.cs
+using System.Collections;
+using System.Collections.Generic;
+using FishNet;
 using FishNet.Connection;
 using FishNet.Object;
 using OverallTimers;
 using UnityEngine;
 
-public class ChestStory : NetworkBehaviour
+public class DeprecatedChestStory : NetworkBehaviour
 {
     // ---- Network Connection ----
     [SerializeField] private NetworkObject playerPrefab;
@@ -156,22 +481,66 @@ public class ChestStory : NetworkBehaviour
     [SerializeField] private float respawnTime = 5f;
     private MultiplayerManager _mm;
     
+    private bool _playerInitialized;
+    
     // ---- Combat ----
     private readonly Dictionary<string, int> _playerScores = new ();
 
     private void Start()
     {
-        // subscribe to client connection events
+        // var netManager = InstanceFinder.NetworkManager;
+        // Debug.Log("isclient " + netManager.IsServerStarted);
+        // Debug.Log("isserver " + netManager.IsServerStarted);
+        // Debug.Log("ishost " + netManager.IsHostStarted);
+        // Debug.Log("is authenticated " + netManager.ClientManager.Connection.IsAuthenticated);
+        
+        InstanceFinder.SceneManager.OnClientLoadedStartScenes += SceneManagerOnOnClientLoadedStartScenes;
+        
+        
+        Debug.Log("cheststory start");
+        // _playerInitialized = false;
+        //
+        // // subscribe to client connection events
         _mm = MultiplayerManager.Instance;
-        _mm.OnClientLoaded += OnClientLoaded;
-        _mm.OnClientDisconnected += OnClientDisconnected;
+        // _mm.OnClientLoaded += OnClientLoaded;
+        // _mm.OnClientDisconnected += OnClientDisconnected;
         
         // setup for host
-        if (NetworkManager.IsHostStarted)
+        // StartCoroutine(SceneLoaded(NetworkManager.ClientManager.Connection));
+    }
+    
+    private void SceneManagerOnOnClientLoadedStartScenes(NetworkConnection conn, bool isServer)
+    {
+        Debug.Log("am I server? " + isServer);
+        Debug.Log("now authenticated? " + InstanceFinder.ClientManager.Connection.IsAuthenticated);
+        Debug.Log("Does this know if I am a host? " + InstanceFinder.ClientManager.Connection.IsHost);
+    }
+
+    private IEnumerator SceneLoaded(NetworkConnection conn)
+    {
+        Debug.Log("isclient " + NetworkManager.IsServerStarted);
+        Debug.Log("isserver " + NetworkManager.IsServerStarted);
+        Debug.Log("ishost " + NetworkManager.IsHostStarted);
+        Debug.Log("is authenticated " + conn.IsAuthenticated);
+        
+        while (!conn.IsAuthenticated)
         {
-            NetworkManager.ClientManager.Connection.OnLoadedStartScenes += (connection, b) =>
-                OnHostConnected(NetworkManager.ClientManager.Connection);
+            Debug.Log("bro what:");
+            Debug.Log(InstanceFinder.ClientManager.Connection.IsAuthenticated);
+            yield return null;
         }
+        while (!conn.LoadedStartScenes())
+        {
+            yield return null;
+        }
+        
+        if (!NetworkManager.IsHostStarted)
+        {
+            Debug.Log("good");
+            yield break;
+        }
+
+        OnHostConnected(NetworkManager.ClientManager.Connection);
     }
 
     private void OnDestroy()
@@ -187,33 +556,38 @@ public class ChestStory : NetworkBehaviour
     /// <param name="connection"></param>
     private void OnClientLoaded(NetworkConnection connection)
     {
+        Debug.Log("I am Host and I loaded: " + connection.IsHost);
+        
+        Debug.Log("loading client");
+        if (_playerInitialized)
+            return;
+        _playerInitialized = true;
+        Debug.Log("client loaded");
+        
         // Setup new player
         var newPlayer = SpawnPlayer(connection);
-        
+        Debug.Log("Great!");
         // Leaderboard
-        if (Wind.Instance.TryGetUsernameForId(connection.ClientId, out var newPlayerUsername))
-        {
-            _playerScores.Add(newPlayerUsername, 0);                       // update on server
-            AddPlayerToLeaderboardRpc(newPlayerUsername);                  // update on existing clients
-            newPlayer.FetchExistingLeaderboard(connection, _playerScores); // update on connected client
-        }
-        else
-            Debug.LogError("username not found for id: " + connection.ClientId);
+        // if (Wind.Instance.TryGetUsernameForId(connection.ClientId, out var newPlayerUsername))
+        // {
+        //     _playerScores.Add(newPlayerUsername, 0);                       // update on server
+        //     AddPlayerToLeaderboardRpc(newPlayerUsername);                  // update on existing clients
+        //     newPlayer.FetchExistingLeaderboard(connection, _playerScores); // update on connected client
+        // }
+        // else
+        //     Debug.LogError("username not found for id: " + connection.ClientId);
     }
 
     private void OnHostConnected(NetworkConnection connection)
     {
+        Debug.Log("loading host");
+        if (_playerInitialized)
+            return;
+        _playerInitialized = true;
+        Debug.Log("host loaded");
+        
         // Setup new player
         SpawnPlayer(connection);
-        
-        // Leaderboard
-        if (Wind.Instance.TryGetUsernameForId(connection.ClientId, out var newPlayerUsername))
-        {
-            _playerScores.Add(newPlayerUsername, 0);                       // update on server
-            AddPlayerToLeaderboardRpc(newPlayerUsername);                  // update on host
-        }
-        else
-            Debug.LogError("username not found for id: " + connection.ClientId);
     }
 
     private void OnClientDisconnected(NetworkConnection connection)
@@ -263,20 +637,20 @@ public class ChestStory : NetworkBehaviour
         if (!player)
             return;
         
-        if (!Wind.Instance.TryGetUsernameForId(shootingPlayerId, out var shootingPlayerUsername)
-            || !Wind.Instance.TryGetUsernameForId(shootingPlayerId, out var shotPlayerUsername))
-            return;
+        // if (!Wind.Instance.TryGetUsernameForId(shootingPlayerId, out var shootingPlayerUsername)
+        //     || !Wind.Instance.TryGetUsernameForId(shootingPlayerId, out var shotPlayerUsername))
+        //     return;
         
-        _playerScores[shootingPlayerUsername] += 1;
-        
-        UpdateLeaderboardScoreRpc(
-            shootingPlayerUsername,
-            shotPlayerUsername,
-            _playerScores[shootingPlayerUsername]);
+        // _playerScores[shootingPlayerUsername] += 1;
+        //
+        // UpdateLeaderboardScoreRpc(
+        //     shootingPlayerUsername,
+        //     shotPlayerUsername,
+        //     _playerScores[shootingPlayerUsername]);
 
         // disable player input on the client
         var handler = player.GetComponent<ChestMultiplayerExtension>();
-        handler.NeutrilizePlayerRpc(handler.Owner);
+        handler.NeutralizePlayerRpc(handler.Owner);
     }
 
     [ObserversRpc]
@@ -312,7 +686,7 @@ public class ChestStory : NetworkBehaviour
         StartCoroutine(TickTimer(timer));
     }
     
-    private System.Collections.IEnumerator TickTimer(CountdownTimer timer)
+    private IEnumerator TickTimer(CountdownTimer timer)
     {
         while (!timer.IsFinished)
         {
@@ -335,7 +709,7 @@ public class ChestStory : NetworkBehaviour
     [ObserversRpc]
     private void AddPlayerToLeaderboardRpc(string playerUsername)
     {
-        Leaderboard.Instance.AddPlayerToLeaderboard(playerUsername);
+        // Leaderboard.Instance.AddPlayerToLeaderboard(playerUsername);
     }
 }
 ```
@@ -487,6 +861,21 @@ public class MenuStory : MonoBehaviour
 }
 ```
 
+```Scripts\OnlinePlayerData.cs
+using FishNet.Connection;
+
+public class OnlinePlayerData
+{
+    public NetworkConnection ClientConnection;
+    
+    public Player PlayerReference;
+    public ChestMultiplayerExtension ChestMultiplayerExtension;
+
+    public string Username;
+    public int Score;
+}
+```
+
 ```Scripts\RaycastGunMultiplayer.cs
 ﻿using FishNet.Connection;
 using FishNet.Object;
@@ -538,6 +927,14 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
         cooldownTimer = new CountdownTimer(maxCooldown);
     }
 
+    public void OnDestroy()
+    {
+        if (!_director)
+            return;
+        
+        _director.OnFirePressed -= OnFirePressed;
+    }
+
     public void UpdatePlayer()
     {
         // Multiplayer Guard
@@ -546,24 +943,6 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
         
         respawnTimer?.Tick(Time.deltaTime);
         cooldownTimer?.Tick(Time.deltaTime);
-    }
-
-    private void PerformShoot()
-    {
-        if (cam == null)
-        {
-            Debug.LogWarning("RaycastGun: Missing camera reference.");
-            return;
-        }
-
-        // Player animations
-        // if (_animationsManager != null)
-        // {
-        //     _animationsManager.Play("Shoot");
-        // }
-
-        // send rpc to server
-        OnPlayerShootRpc(localPlayerId, cam.position, cam.forward);
     }
     
     private void OnFirePressed()
@@ -580,16 +959,34 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
         PerformShoot();
     }
 
+    private void PerformShoot()
+    {
+        if (cam == null)
+        {
+            Debug.LogWarning("RaycastGun: Missing camera reference.");
+            return;
+        }
+
+        // Player animations
+        // if (_animationsManager != null)
+        // {
+        //     _animationsManager.Play("Shoot");
+        // }
+
+        // request shoot from server
+        OnPlayerShootRpc(localPlayerId, cam.position, cam.forward);
+    }
+
     [ServerRpc(RequireOwnership = true)]
     private void OnPlayerShootRpc(int localId, Vector3 camPosition, Vector3 camForward)
     {
+        // calculate on server shoot result
         if (!IsServerStarted)
             return;
         
-        // log for self
-        Debug.Log($"Doing some calculations. from {camPosition} to {camForward}");
+        Debug.Log($"Shooting requested. from {camPosition} to {camForward}");
         
-        // rpc
+        // using raycast gun
         Vector3 origin = camPosition + camForward * 0.65f; // to not hit self
         Ray ray = new Ray(origin, camForward);
 
@@ -622,6 +1019,39 @@ public class RespawnScreen : MonoBehaviour
 }
 ```
 
+```Scripts\SanityStory.cs
+using System.Collections;
+using System.Collections.Generic;
+using FishNet;
+using FishNet.Connection;
+using FishNet.Managing;
+using UnityEngine;
+
+public class SanityStory : MonoBehaviour
+{
+    // Start is called once before the first execution of Update after the MonoBehaviour is created
+    void Start()
+    {
+        Debug.Log("Start always gets called");
+        Debug.Log("authenticated " + InstanceFinder.ClientManager.Connection.IsAuthenticated);
+        
+        InstanceFinder.SceneManager.OnClientLoadedStartScenes += SceneManagerOnOnClientLoadedStartScenes;
+        // var netManager = InstanceFinder.NetworkManager;
+        // Debug.Log("isclient " + netManager.IsServerStarted);
+        // Debug.Log("isserver " + netManager.IsServerStarted);
+        // Debug.Log("ishost " + netManager.IsHostStarted);
+        // Debug.Log("is authenticated " + netManager.ClientManager.Connection.IsAuthenticated);
+    }
+
+    private void SceneManagerOnOnClientLoadedStartScenes(NetworkConnection conn, bool isServer)
+    {
+        Debug.Log("am I server? " + isServer);
+        Debug.Log("now authenticated? " + InstanceFinder.ClientManager.Connection.IsAuthenticated);
+        Debug.Log("Does this know if I am a host? " + InstanceFinder.ClientManager.Connection.IsHost);
+    }
+}
+```
+
 ```Scripts\Leaderboard\Leaderboard.cs
 using System.Collections.Generic;
 using UnityEngine;
@@ -649,10 +1079,10 @@ public class Leaderboard : MonoBehaviour
     #endregion
 
     /// <summary>
-    /// For existing players, add this new player to the leaderboard
+    /// add new player to the leaderboard
     /// </summary>
     /// <param name="playerUsername">new player username</param>
-    public void AddPlayerToLeaderboard(string playerUsername)
+    private void AddPlayerToLeaderboard(string playerUsername)
     {
         var cardObject = Resources.Load<LeaderboardCard>("LeaderboardCard");
         if (!cardObject)
@@ -672,9 +1102,14 @@ public class Leaderboard : MonoBehaviour
     /// for the new player, give the full leaderboard including himself.
     /// </summary>
     /// <param name="updatedBoard">all connected players, including myself (new player)</param>
-    public void UpdateLeaderboard(Dictionary<string, int> updatedBoard)
+    public void RebuildLeaderboard(Dictionary<string, int> updatedBoard)
     {
-        // add existing
+        // Clean Leaderboard
+        foreach (var card in _cards)
+            Destroy(card.Value.gameObject);
+        _cards.Clear();
+        
+        // Rebuild Leaderboard
         foreach (var player in updatedBoard)
         {
             AddPlayerToLeaderboard(player.Key);
@@ -835,6 +1270,9 @@ public class UsernameAuthenticator : Authenticator
 
     private void Awake()
     {
+        _takenUsernames.Clear();
+        StoryOnAuthenticationResult.RemoveAllListeners();
+        
         DontDestroyOnLoad(gameObject);
     }
 
@@ -854,6 +1292,14 @@ public class UsernameAuthenticator : Authenticator
     /// </summary>
     private void OnReceiveUsernameRequest(NetworkConnection conn, UsernameRequest request, Channel channel)
     {
+        // can't be already authenticated
+        if (conn.IsAuthenticated)
+        {
+            Debug.LogError("connection already authenticated? possible attack.");
+            conn.Disconnect(true);
+            return;
+        }
+        
         // verify username
         string username = request.Username?.Trim();
         bool success = !string.IsNullOrWhiteSpace(username) && !_takenUsernames.Contains(username);
@@ -945,7 +1391,7 @@ public class Wind : MonoBehaviour
     public UnityEvent<string> OnClientApproved = new ();
     public UnityEvent<int> OnClientLeave = new ();
 
-    private Dictionary<int, string> _playerUsernames = new();
+    private readonly Dictionary<int, string> _playerUsernames = new();
 
     public void AddPlayer(int id, string username)
     {
@@ -963,9 +1409,12 @@ public class Wind : MonoBehaviour
         OnClientLeave?.Invoke(id);
     }
 
-    public bool TryGetUsernameForId(int playerId, out string username)
+    public string GetUsernameForId(int playerId)
     {
-        return _playerUsernames.TryGetValue(playerId, out username);
+        if (_playerUsernames.TryGetValue(playerId, out var username))
+            return username;
+        
+        throw new KeyNotFoundException($"Wind: can't find username for player id: {playerId}");
     }
 }
 ```
