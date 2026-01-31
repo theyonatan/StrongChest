@@ -41,12 +41,15 @@ public class ChestGameManager : NetworkBehaviour
 
     #endregion
 
-    #region LeaderboardUpdate
+    #region GameplayUpdate
 
     [ObserversRpc]
     public void UpdateLeaderboardScoreRpc(string shooting, string shot, int shootingKillCount)
     {
         Debug.Log($"{shooting} shot {shot}.");
+        
+        KillChat.Instance.AddKill(shooting, shot);
+        
         Leaderboard.Instance.UpdateCount(shooting, shootingKillCount);
     }
 

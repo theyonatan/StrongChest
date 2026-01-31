@@ -199,10 +199,12 @@ public class ChestStory : MonoBehaviour
         var playerShooterUsername = Wind.Instance.GetUsernameForId(shooterPlayerId);
         var playerKilledUsername = Wind.Instance.GetUsernameForId(killedPlayerId);
 
+        Debug.Log(_gameManager.IsSpawned);
         _gameManager.UpdateLeaderboardScoreRpc(
             playerShooterUsername,
             playerKilledUsername,
             playerShooterScore);
+        Debug.Log(_gameManager.isActiveAndEnabled);
 
         // Neutralize killed player
         var handler = killedPlayer.ChestMultiplayerExtension;
@@ -214,15 +216,7 @@ public class ChestStory : MonoBehaviour
         var handler = _players[playerId].ChestMultiplayerExtension;
         var owner = _players[playerId].ClientConnection;
 
-        Debug.Log("what");
-        
-        Debug.Log(_players[playerId].ChestMultiplayerExtension);
-        Debug.Log(_players[playerId].ChestMultiplayerExtension.IsSpawned);
-        Debug.Log(_players[playerId].ChestMultiplayerExtension == null);
-        Debug.Log(_players[playerId].ChestMultiplayerExtension.isActiveAndEnabled);
-        
         InstanceFinder.ServerManager.Despawn(handler);
-        Debug.Log("not it, right");
         StartCoroutine(RespawnClient(owner));
     }
 
@@ -231,7 +225,6 @@ public class ChestStory : MonoBehaviour
         // respawn cooldown
         yield return new WaitForSeconds(respawnTime);
         
-        Debug.Log("wait");
         // spawn new player
         SpawnPlayerToGame(conn);
     }
