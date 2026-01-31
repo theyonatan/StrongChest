@@ -329,6 +329,22 @@ Scene: Assets/Game/game.unity
     * Component: UnityEngine.UI.VerticalLayoutGroup
     * Component: UnityEngine.UI.ContentSizeFitter
     * Component: Leaderboard
+  - KillChat
+    * Component: UnityEngine.RectTransform
+    * Component: UnityEngine.CanvasRenderer
+    * Component: UnityEngine.UI.Image
+    * Component: UnityEngine.UI.VerticalLayoutGroup
+    * Component: UnityEngine.UI.ContentSizeFitter
+    * Component: KillChat
+  - AddKillChat
+    * Component: UnityEngine.RectTransform
+    * Component: UnityEngine.CanvasRenderer
+    * Component: UnityEngine.UI.Image
+    * Component: UnityEngine.UI.Button
+    - Text (TMP)
+      * Component: UnityEngine.RectTransform
+      * Component: UnityEngine.CanvasRenderer
+      * Component: TMPro.TextMeshProUGUI
 - EventSystem
   * Component: UnityEngine.Transform
   * Component: UnityEngine.EventSystems.EventSystem
