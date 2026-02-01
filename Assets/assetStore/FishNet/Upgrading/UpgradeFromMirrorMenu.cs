@@ -1,4 +1,5 @@
 ﻿#if UNITY_EDITOR
+using System;
 using FishNet.Documenting;
 using System.Collections.Generic;
 using UnityEditor;
@@ -39,6 +40,7 @@ namespace FishNet.Upgrading.Mirror.Editing
         }
 
         [MenuItem("Tools/Fish-Networking/Utility/Upgrading/From Mirror/Remove Defines", false, 2)]
+        [Obsolete("Obsolete")]
         private static void RemoveDefines()
         {
             string currentDefines = PlayerSettings.GetScriptingDefineSymbolsForGroup(EditorUserBuildSettings.selectedBuildTargetGroup);

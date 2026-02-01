@@ -1,13 +1,10 @@
-using System.Collections;
 using System.Net;
 using System.Net.Sockets;
 using FishNet;
 using FishNet.Managing;
 using FishNet.Managing.Scened;
-using FishNet.Object;
 using FishNet.Transporting;
 using UnityEngine;
-using UnityEngine.LowLevelPhysics;
 
 public class MenuStory : MonoBehaviour
 {
@@ -17,8 +14,6 @@ public class MenuStory : MonoBehaviour
     
     [SerializeField] private TMPro.TextMeshProUGUI displayIpText;
 
-    [SerializeField] private WindManager windManagerPrefab;
-    
     private NetworkManager _networkManager;
     
     private string _chosenUsername;
@@ -127,7 +122,7 @@ public class MenuStory : MonoBehaviour
         if (available)
         {
             // Confirm username locally
-            PlayerWindManager.ChosenUsername = usernameField.text.Trim();
+            Debug.Log("username received. connection success!");
             usernameErrorText.text = "Connection Successful";
         }
     }

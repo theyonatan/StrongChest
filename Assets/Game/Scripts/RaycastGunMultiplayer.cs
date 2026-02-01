@@ -1,5 +1,4 @@
-﻿using FishNet.Connection;
-using FishNet.Object;
+﻿using FishNet.Object;
 using OverallTimers;
 using UnityEngine;
 
@@ -10,11 +9,10 @@ using UnityEngine;
 public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
 {
     [Header("Gun Stats")]
-    [SerializeField] private float damage = 10f;
     [SerializeField] private float maxCooldown = 0.5f;
 
-    private CountdownTimer cooldownTimer;
-    private Transform cam;
+    private CountdownTimer _cooldownTimer;
+    private Transform _cam;
     private Player _player;
     private InputDirector _director;
     
@@ -24,10 +22,9 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
     private AnimationsManager _animationsManager;
 
     [Header("Multiplayer Settings")]
-    private CountdownTimer respawnTimer;
-    private float respawnTime = 5f;
-    private int localPlayerId = -1;
-    private bool neutralized;
+    private CountdownTimer _respawnTimer;
+    private int _localPlayerId = -1;
+    private bool _neutralized;
     
     public void OnEnablePlayer()
     {
@@ -38,15 +35,15 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
         
         // Get Assignables
         _animationsManager = GetComponent<AnimationsManager>();
-        cam = _player.GetCamera().transform;
+        _cam = _player.GetCamera().transform;
         _director = GetComponent<InputDirector>();
-        localPlayerId = _player.PlayerId;
+        _localPlayerId = _player.PlayerId;
         
         // Subscribe to input events
         _director.OnFirePressed += OnFirePressed;
 
         // Reset cooldown
-        cooldownTimer = new CountdownTimer(maxCooldown);
+        _cooldownTimer = new CountdownTimer(maxCooldown);
     }
 
     public void OnPlayerNeutralized()
@@ -55,9 +52,9 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
         
         if (!_director)
             return;
-        if (neutralized)
+        if (_neutralized)
             return;
-        neutralized = true;
+        _neutralized = true;
         
         _director.OnFirePressed -= OnFirePressed;
     }
@@ -73,8 +70,8 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
         if (!_player.HasAuthority)
             return;
         
-        respawnTimer?.Tick(Time.deltaTime);
-        cooldownTimer?.Tick(Time.deltaTime);
+        _respawnTimer?.Tick(Time.deltaTime);
+        _cooldownTimer?.Tick(Time.deltaTime);
     }
     
     private void OnFirePressed()
@@ -87,16 +84,16 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
             return;
         
         // If there's still cooldown, don't shoot
-        if (!cooldownTimer.IsFinished) return;
-        cooldownTimer.Reset();
-        cooldownTimer.Start();
+        if (!_cooldownTimer.IsFinished) return;
+        _cooldownTimer.Reset();
+        _cooldownTimer.Start();
 
         PerformShoot();
     }
 
     private void PerformShoot()
     {
-        if (cam == null)
+        if (_cam == null)
         {
             Debug.LogWarning("RaycastGun: Missing camera reference.");
             return;
@@ -109,7 +106,7 @@ public class RaycastGunMultiplayer : NetworkBehaviour, IPlayerBehavior
         // }
 
         // request shoot from server
-        OnPlayerShootRpc(localPlayerId, cam.position, cam.forward);
+        OnPlayerShootRpc(_localPlayerId, _cam.position, _cam.forward);
     }
 
     [ServerRpc(RequireOwnership = true)]
