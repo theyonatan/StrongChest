@@ -1,5 +1,7 @@
 using FishNet.Connection;
 using FishNet.Object;
+using TMPro;
+using UnityEngine;
 
 public class ChestMultiplayerExtension : NetworkBehaviour
 {
@@ -27,13 +29,19 @@ public class ChestMultiplayerExtension : NetworkBehaviour
         FindFirstObjectByType<RespawnScreen>().HideScreen();
     }
 
+    [SerializeField] private TextMeshPro usernameText;
+    
     /// <summary>
     /// for all clients, updates the username on this player.
     /// </summary>
     [ObserversRpc]
     public void UpdateUsernameOnPlayer(string username)
     {
+        // update for everyone but self
+        if (GetComponent<Player>().HasAuthority)
+            return;
         
+        usernameText.text = username;
     }
 
     #endregion
