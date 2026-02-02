@@ -336,15 +336,18 @@ Scene: Assets/Game/game.unity
     * Component: UnityEngine.UI.VerticalLayoutGroup
     * Component: UnityEngine.UI.ContentSizeFitter
     * Component: KillChat
-  - AddKillChat
+  - TestButtons
     * Component: UnityEngine.RectTransform
-    * Component: UnityEngine.CanvasRenderer
-    * Component: UnityEngine.UI.Image
-    * Component: UnityEngine.UI.Button
-    - Text (TMP)
+    * Component: TestMode
+    - AddKillChat
       * Component: UnityEngine.RectTransform
       * Component: UnityEngine.CanvasRenderer
-      * Component: TMPro.TextMeshProUGUI
+      * Component: UnityEngine.UI.Image
+      * Component: UnityEngine.UI.Button
+      - Text (TMP)
+        * Component: UnityEngine.RectTransform
+        * Component: UnityEngine.CanvasRenderer
+        * Component: TMPro.TextMeshProUGUI
 - EventSystem
   * Component: UnityEngine.Transform
   * Component: UnityEngine.EventSystems.EventSystem
@@ -352,64 +355,4 @@ Scene: Assets/Game/game.unity
 - Story
   * Component: UnityEngine.Transform
   * Component: ChestStory
-Scene: Assets/assetStore/FishNet/Demos/Authenticator/Scenes/test.unity
-- Main Camera
-  * Component: UnityEngine.Transform
-  * Component: UnityEngine.Camera
-  * Component: UnityEngine.AudioListener
-- Directional Light
-  * Component: UnityEngine.Transform
-  * Component: UnityEngine.Light
-  * Component: UnityEngine.Rendering.Universal.UniversalAdditionalLightData
-- testscript
-  * Component: UnityEngine.Transform
-  * Component: authenticationTest
-- Prefab Indexer
-  * Component: UnityEngine.Transform
-  * Component: Framework.Utils.UnityPlayModeSaverSceneUtils
-Scene: Assets/assetStore/FishNet/Demos/Authenticator/Scenes/Authenticator.unity
-- NetworkManager
-  * Component: UnityEngine.Transform
-  * Component: FishNet.Managing.NetworkManager
-  * Component: FishNet.Example.Authenticating.PasswordAuthenticator
-- NetworkHudCanvas
-  * Component: UnityEngine.RectTransform
-  * Component: FishNet.Example.NetworkHudCanvases
-  * Component: UnityEngine.Canvas
-  * Component: UnityEngine.UI.CanvasScaler
-  * Component: UnityEngine.UI.GraphicRaycaster
-  - Logo
-    * Component: UnityEngine.RectTransform
-    * Component: UnityEngine.CanvasRenderer
-    * Component: UnityEngine.UI.RawImage
-  - ClientButton
-    * Component: UnityEngine.RectTransform
-    * Component: UnityEngine.CanvasRenderer
-    * Component: UnityEngine.UI.Image
-    - Text
-      * Component: UnityEngine.RectTransform
-      * Component: UnityEngine.CanvasRenderer
-      * Component: UnityEngine.UI.Image
-      * Component: UnityEngine.UI.Button
-  - ServerButton
-    * Component: UnityEngine.RectTransform
-    * Component: UnityEngine.CanvasRenderer
-    * Component: UnityEngine.UI.Image
-    - Text
-      * Component: UnityEngine.RectTransform
-      * Component: UnityEngine.CanvasRenderer
-      * Component: UnityEngine.UI.Image
-      * Component: UnityEngine.UI.Button
-- EventSystem
-  * Component: UnityEngine.Transform
-  * Component: UnityEngine.EventSystems.EventSystem
-  * Component: UnityEngine.EventSystems.StandaloneInputModule
-- Prefab Indexer
-  * Component: UnityEngine.Transform
-  * Component: Framework.Utils.UnityPlayModeSaverSceneUtils
-- Camera
-  * Component: UnityEngine.Transform
-  * Component: UnityEngine.Camera
-  * Component: UnityEngine.AudioListener
-  * Component: UnityEngine.Rendering.Universal.UniversalAdditionalCameraData
 ==== SCENE DEBUG END ====

@@ -400,7 +400,7 @@ MonoBehaviour:
   _componentIndexCache: 2
   _addedNetworkObject: {fileID: 4778891040591171001}
   _networkObjectCache: {fileID: 4778891040591171001}
-  usernameText: {fileID: 0}
+  usernameText: {fileID: 5788687057696777874}
 --- !u!114 &5685395334387654109
 MonoBehaviour:
   m_ObjectHideFlags: 0
