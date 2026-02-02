@@ -104,8 +104,9 @@ public class ChestStory : MonoBehaviour
         
         // Update Username of all players
         _players[conn.ClientId].Username = newPlayerUsername;
+        
         foreach (var playerHandler in _players.Values)
-            playerHandler.ChestMultiplayerExtension.UpdateUsernameOnPlayer(newPlayerUsername);
+            playerHandler.ChestMultiplayerExtension.UpdateUsernameOnPlayer(playerHandler.Username);
 
         // Leaderboard
         var leaderboardDict = _players.ToDictionary(

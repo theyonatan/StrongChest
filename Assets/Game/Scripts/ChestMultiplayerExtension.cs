@@ -21,6 +21,9 @@ public class ChestMultiplayerExtension : NetworkBehaviour
         player.OnEnable();
         player.Start();
         
+        // Username
+        VerifySelfUsername();
+        
         player.SwapPlayerState<cc_fpState, FP_CameraState>();
         
         // load extensions too
@@ -29,7 +32,8 @@ public class ChestMultiplayerExtension : NetworkBehaviour
         FindFirstObjectByType<RespawnScreen>().HideScreen();
     }
 
-    [SerializeField] private TextMeshPro usernameText;
+    private string _savedUsername;
+    [SerializeField] private TextMeshProUGUI usernameText;
     
     /// <summary>
     /// for all clients, updates the username on this player.
@@ -37,11 +41,25 @@ public class ChestMultiplayerExtension : NetworkBehaviour
     [ObserversRpc]
     public void UpdateUsernameOnPlayer(string username)
     {
+        // update local player object's username value
+        _savedUsername = username;
+        
         // update for everyone but self
-        if (GetComponent<Player>().HasAuthority)
+        if (VerifySelfUsername())
             return;
         
         usernameText.text = username;
+    }
+
+    private bool VerifySelfUsername()
+    {
+        if (GetComponent<Player>().HasAuthority)
+        {
+            usernameText.gameObject.SetActive(false);
+            return true;
+        }
+        
+        return false;
     }
 
     #endregion
